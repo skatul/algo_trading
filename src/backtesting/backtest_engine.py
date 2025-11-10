@@ -456,7 +456,7 @@ class BacktestEngine:
         print(f"Total Trades: {self.results['total_trades']}")
         print(f"Winning Trades: {self.results['winning_trades']}")
         print(f"Win Rate: {self.results['win_rate']*100:.2f}%")
-        print(f"Profit Factor: {self.results['profit_factor']:.3f}")
+        print(f"Profit Factor: {'∞ (no losses)' if self.results['profit_factor'] == float('inf') else f'{self.results['profit_factor']:.3f}'}")
         print(f"{'='*60}")
         print("📈 Enhanced with QuantStats - Professional Portfolio Analytics")
 
