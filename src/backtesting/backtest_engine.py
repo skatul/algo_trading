@@ -375,20 +375,35 @@ class BacktestEngine:
             else float("inf") if total_wins > 0 else 0
         )
 
+        # Helper function to safely convert to float
+        def safe_float(value) -> float:
+            """Safely convert value to float, handling Series, complex, and other types."""
+            if hasattr(value, 'iloc') and len(value) > 0:  # pandas Series
+                return float(value.iloc[0])
+            elif hasattr(value, 'real'):  # complex numbers
+                return float(value.real)
+            elif isinstance(value, (int, float)):
+                return float(value)
+            else:
+                try:
+                    return float(value)
+                except (TypeError, ValueError):
+                    return 0.0
+
         return {
-            "total_return": self._safe_float_conversion(total_return),
-            "annualized_return": self._safe_float_conversion(annualized_return),
-            "volatility": self._safe_float_conversion(volatility),
-            "sharpe_ratio": self._safe_float_conversion(sharpe_ratio),
-            "sortino_ratio": self._safe_float_conversion(sortino_ratio),
-            "calmar_ratio": self._safe_float_conversion(calmar_ratio),
-            "max_drawdown": self._safe_float_conversion(max_drawdown),
-            "var_95": self._safe_float_conversion(var_95),
-            "cvar_95": self._safe_float_conversion(cvar_95),
-            "skewness": self._safe_float_conversion(skewness),
-            "kurtosis": self._safe_float_conversion(kurtosis),
-            "best_day": self._safe_float_conversion(best_day),
-            "worst_day": self._safe_float_conversion(worst_day),
+            "total_return": safe_float(total_return),
+            "annualized_return": safe_float(annualized_return),
+            "volatility": safe_float(volatility),
+            "sharpe_ratio": safe_float(sharpe_ratio),
+            "sortino_ratio": safe_float(sortino_ratio),
+            "calmar_ratio": safe_float(calmar_ratio),
+            "max_drawdown": safe_float(max_drawdown),
+            "var_95": safe_float(var_95),
+            "cvar_95": safe_float(cvar_95),
+            "skewness": safe_float(skewness),
+            "kurtosis": safe_float(kurtosis),
+            "best_day": safe_float(best_day),
+            "worst_day": safe_float(worst_day),
             "total_trades": total_trades,
             "winning_trades": winning_trades,
             "win_rate": win_rate,
