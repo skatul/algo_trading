@@ -150,11 +150,9 @@ class TradingEngine:
         """
         # Get initial capital from config if not provided
         if initial_capital is None:
-            initial_capital = self.config.get("trading.initial_capital", 100000)
-        
-        # Ensure we have a valid float value
-        assert initial_capital is not None, "initial_capital cannot be None"
-        initial_capital = float(initial_capital)
+            initial_capital = float(self.config.get("trading.initial_capital", 100000))
+        else:
+            initial_capital = float(initial_capital)
 
         # Create strategy if string provided
         if isinstance(strategy, str):

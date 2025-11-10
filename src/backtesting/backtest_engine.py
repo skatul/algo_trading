@@ -6,10 +6,12 @@ including performance metrics, visualization, and trade analysis.
 """
 
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import quantstats as qs
 from typing import Dict, List, Optional
 import logging
+import math
 
 
 class BacktestEngine:
@@ -34,6 +36,53 @@ class BacktestEngine:
         self.portfolio_values = []
         self.positions = []
         self.results = {}
+
+    @staticmethod
+    def _safe_float_conversion(value, default: float = 0.0) -> float:
+        """
+        Safely convert a value to float, handling NaN and infinity cases.
+        
+        Args:
+            value: Value to convert (can be from QuantStats or other sources)
+            default: Default value to return if conversion fails or value is NaN/inf
+            
+        Returns:
+            Converted float value or default if value is NaN or infinity
+        """
+        # Handle pandas Series by extracting first value
+        if hasattr(value, 'iloc'):
+            if len(value) == 0:
+                return default
+            return BacktestEngine._safe_float_conversion(value.iloc[0], default)
+            
+        # Handle numpy arrays
+        if isinstance(value, np.ndarray):
+            if value.size == 0:
+                return default
+            elif value.size == 1:
+                return BacktestEngine._safe_float_conversion(value.item(), default)
+            else:
+                return default
+        
+        # Check for NaN using pandas (for scalars)
+        try:
+            if pd.isna(value):
+                return default
+        except (ValueError, TypeError):
+            # If pd.isna fails, continue with other checks
+            pass
+        
+        # Convert to float
+        try:
+            float_value = float(value)
+        except (ValueError, TypeError):
+            return default
+        
+        # Check for infinity
+        if math.isinf(float_value):
+            return default
+            
+        return float_value
 
     def run_backtest(
         self,
@@ -275,12 +324,8 @@ class BacktestEngine:
             max_drawdown = qs.stats.max_drawdown(returns)
             
             # Risk metrics
-            # QuantStats returns VaR often as a negative number (loss).
-            # We'll store magnitudes for presentation (positive % loss).
-            var_raw = qs.stats.var(returns)
-            var_95 = abs(var_raw) if var_raw is not None else 0.0
-            cvar_raw = qs.stats.cvar(returns)
-            cvar_95 = abs(cvar_raw) if cvar_raw is not None else 0.0
+            var_95 = qs.stats.var(returns)
+            cvar_95 = qs.stats.cvar(returns)
             
             # Distribution metrics
             skewness = qs.stats.skew(returns)
@@ -312,10 +357,8 @@ class BacktestEngine:
             # Set defaults for enhanced metrics
             sortino_ratio = sharpe_ratio  # Approximation
             calmar_ratio = annualized_return / abs(max_drawdown) if max_drawdown != 0 else 0
-            # Fallback VaR/CVaR: compute magnitude (positive)
-            var_95 = abs(returns.quantile(0.05)) if len(returns) > 0 else 0
-            cvar_vals = returns[returns <= -var_95] if var_95 > 0 else returns[returns <= returns.quantile(0.05)]
-            cvar_95 = abs(cvar_vals.mean()) if len(cvar_vals) > 0 else var_95
+            var_95 = returns.quantile(0.05) if len(returns) > 0 else 0
+            cvar_95 = returns[returns <= var_95].mean() if len(returns[returns <= var_95]) > 0 else var_95
             skewness = returns.skew() if len(returns) > 2 else 0
             kurtosis = returns.kurtosis() if len(returns) > 2 else 0
             best_day = returns.max() if len(returns) > 0 else 0
@@ -352,95 +395,20 @@ class BacktestEngine:
             else float("inf") if total_wins > 0 else 0
         )
 
-        # Helper function to safely convert to float
-        def safe_float(value) -> float:
-            """
-            Safely convert a value to float, handling edge cases robustly.
-            
-            Args:
-                value: Value to convert (Series, ndarray, complex, scalar, etc.)
-                
-            Returns:
-                Float value or 0.0 if invalid/unconvertible
-            """
-            import math
-            import numbers
-            # Lazy import for numpy support
-            try:
-                import numpy as _np
-            except Exception:
-                _np = None
-            
-            # Default for invalid values
-            default = 0.0
-            
-            if value is None:
-                return default
-                
-            # Handle pandas Series/Index or other array-like with iloc
-            if hasattr(value, 'iloc'):
-                try:
-                    if len(value) == 0:
-                        return default
-                    scalar = value.iloc[0]
-                    return safe_float(scalar)  # Recursive call for extracted scalar
-                except Exception:
-                    return default
-                    
-            # Handle numpy arrays (allow single-element arrays)
-            if _np is not None and isinstance(value, _np.ndarray):
-                try:
-                    if value.size == 0:
-                        return default
-                    if value.size == 1:
-                        return safe_float(value.item())
-                    return default
-                except Exception:
-                    return default
-                    
-            # Handle numeric scalars explicitly
-            if isinstance(value, (int, float)):
-                try:
-                    f = float(value)
-                    if math.isnan(f) or math.isinf(f):
-                        return default
-                    return f
-                except Exception:
-                    return default
-            
-            # Handle complex numbers
-            if isinstance(value, complex):
-                try:
-                    f = float(value.real)
-                    if math.isnan(f) or math.isinf(f):
-                        return default
-                    return f
-                except Exception:
-                    return default
-                    
-            # Fallback: try direct conversion and validate
-            try:
-                f = float(value)
-                if math.isnan(f) or math.isinf(f):
-                    return default
-                return f
-            except Exception:
-                return default
-
         return {
-            "total_return": safe_float(total_return),
-            "annualized_return": safe_float(annualized_return),
-            "volatility": safe_float(volatility),
-            "sharpe_ratio": safe_float(sharpe_ratio),
-            "sortino_ratio": safe_float(sortino_ratio),
-            "calmar_ratio": safe_float(calmar_ratio),
-            "max_drawdown": safe_float(max_drawdown),
-            "var_95": safe_float(var_95),
-            "cvar_95": safe_float(cvar_95),
-            "skewness": safe_float(skewness),
-            "kurtosis": safe_float(kurtosis),
-            "best_day": safe_float(best_day),
-            "worst_day": safe_float(worst_day),
+            "total_return": self._safe_float_conversion(total_return),
+            "annualized_return": self._safe_float_conversion(annualized_return),
+            "volatility": self._safe_float_conversion(volatility),
+            "sharpe_ratio": self._safe_float_conversion(sharpe_ratio),
+            "sortino_ratio": self._safe_float_conversion(sortino_ratio),
+            "calmar_ratio": self._safe_float_conversion(calmar_ratio),
+            "max_drawdown": self._safe_float_conversion(max_drawdown),
+            "var_95": self._safe_float_conversion(var_95),
+            "cvar_95": self._safe_float_conversion(cvar_95),
+            "skewness": self._safe_float_conversion(skewness),
+            "kurtosis": self._safe_float_conversion(kurtosis),
+            "best_day": self._safe_float_conversion(best_day),
+            "worst_day": self._safe_float_conversion(worst_day),
             "total_trades": total_trades,
             "winning_trades": winning_trades,
             "win_rate": win_rate,
@@ -630,19 +598,7 @@ class BacktestEngine:
             raise ValueError("No backtest results available. Run backtest first.")
         
         # Prepare returns data
-        # Accept several possible representations in self.results["data"]:
-        data = self.results.get("data", {})
-        if isinstance(data, pd.DataFrame):
-            if "returns" in data:
-                returns = data["returns"].dropna()
-            elif "close" in data:
-                returns = data["close"].pct_change().dropna()
-            else:
-                raise ValueError("Results data does not contain 'returns' or 'close' series.")
-        elif isinstance(data, pd.Series):
-            returns = data.dropna()
-        else:
-            raise ValueError("Unrecognized results['data'] format for returns.")
+        returns = self.results["data"]["returns"].dropna()
         returns.name = "Strategy Returns"
         
         # Set default output path
@@ -662,17 +618,8 @@ class BacktestEngine:
                     from src.data.data_fetcher import DataFetcher
                     
                     fetcher = DataFetcher()
-                    # Safely coerce start/end dates (support strings or datetimes)
-                    start_date_raw = self.results.get("start_date", None)
-                    end_date_raw = self.results.get("end_date", None)
-                    if start_date_raw is not None:
-                        start_date = pd.to_datetime(start_date_raw).strftime("%Y-%m-%d")
-                    else:
-                        start_date = returns.index.min().strftime("%Y-%m-%d")
-                    if end_date_raw is not None:
-                        end_date = pd.to_datetime(end_date_raw).strftime("%Y-%m-%d")
-                    else:
-                        end_date = returns.index.max().strftime("%Y-%m-%d")
+                    start_date = self.results["start_date"].strftime("%Y-%m-%d")
+                    end_date = self.results["end_date"].strftime("%Y-%m-%d")
                     
                     benchmark_data = fetcher.get_yahoo_data(benchmark_symbol, start=start_date, end=end_date)
                     if benchmark_data is not None and len(benchmark_data) > 1:
