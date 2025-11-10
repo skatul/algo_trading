@@ -198,11 +198,11 @@ def main():
         # Demo 4: Multiple Symbols
         demo_multiple_symbols()
 
-
+        # Demo 5: Comprehensive Analysis
+        demo_comprehensive_analysis()
 
         # Demo 6: QuantStats Integration (NEW!)
         demo_quantstats_integration()
-
         print("✅ All demos completed successfully!")
         print("\nNext steps:")
         print("1. Modify strategy parameters in the demos above")
