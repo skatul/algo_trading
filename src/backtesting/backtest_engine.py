@@ -275,8 +275,12 @@ class BacktestEngine:
             max_drawdown = qs.stats.max_drawdown(returns)
             
             # Risk metrics
-            var_95 = qs.stats.var(returns)
-            cvar_95 = qs.stats.cvar(returns)
+            # QuantStats returns VaR often as a negative number (loss).
+            # We'll store magnitudes for presentation (positive % loss).
+            var_raw = qs.stats.var(returns)
+            var_95 = abs(var_raw) if var_raw is not None else 0.0
+            cvar_raw = qs.stats.cvar(returns)
+            cvar_95 = abs(cvar_raw) if cvar_raw is not None else 0.0
             
             # Distribution metrics
             skewness = qs.stats.skew(returns)
@@ -308,8 +312,10 @@ class BacktestEngine:
             # Set defaults for enhanced metrics
             sortino_ratio = sharpe_ratio  # Approximation
             calmar_ratio = annualized_return / abs(max_drawdown) if max_drawdown != 0 else 0
-            var_95 = returns.quantile(0.05) if len(returns) > 0 else 0
-            cvar_95 = returns[returns <= var_95].mean() if len(returns[returns <= var_95]) > 0 else var_95
+            # Fallback VaR/CVaR: compute magnitude (positive)
+            var_95 = abs(returns.quantile(0.05)) if len(returns) > 0 else 0
+            cvar_vals = returns[returns <= -var_95] if var_95 > 0 else returns[returns <= returns.quantile(0.05)]
+            cvar_95 = abs(cvar_vals.mean()) if len(cvar_vals) > 0 else var_95
             skewness = returns.skew() if len(returns) > 2 else 0
             kurtosis = returns.kurtosis() if len(returns) > 2 else 0
             best_day = returns.max() if len(returns) > 0 else 0
@@ -359,6 +365,11 @@ class BacktestEngine:
             """
             import math
             import numbers
+            # Lazy import for numpy support
+            try:
+                import numpy as _np
+            except Exception:
+                _np = None
             
             # Default for invalid values
             default = 0.0
@@ -373,6 +384,17 @@ class BacktestEngine:
                         return default
                     scalar = value.iloc[0]
                     return safe_float(scalar)  # Recursive call for extracted scalar
+                except Exception:
+                    return default
+                    
+            # Handle numpy arrays (allow single-element arrays)
+            if _np is not None and isinstance(value, _np.ndarray):
+                try:
+                    if value.size == 0:
+                        return default
+                    if value.size == 1:
+                        return safe_float(value.item())
+                    return default
                 except Exception:
                     return default
                     
@@ -608,7 +630,19 @@ class BacktestEngine:
             raise ValueError("No backtest results available. Run backtest first.")
         
         # Prepare returns data
-        returns = self.results["data"]["returns"].dropna()
+        # Accept several possible representations in self.results["data"]:
+        data = self.results.get("data", {})
+        if isinstance(data, pd.DataFrame):
+            if "returns" in data:
+                returns = data["returns"].dropna()
+            elif "close" in data:
+                returns = data["close"].pct_change().dropna()
+            else:
+                raise ValueError("Results data does not contain 'returns' or 'close' series.")
+        elif isinstance(data, pd.Series):
+            returns = data.dropna()
+        else:
+            raise ValueError("Unrecognized results['data'] format for returns.")
         returns.name = "Strategy Returns"
         
         # Set default output path
@@ -628,8 +662,17 @@ class BacktestEngine:
                     from src.data.data_fetcher import DataFetcher
                     
                     fetcher = DataFetcher()
-                    start_date = self.results["start_date"].strftime("%Y-%m-%d")
-                    end_date = self.results["end_date"].strftime("%Y-%m-%d")
+                    # Safely coerce start/end dates (support strings or datetimes)
+                    start_date_raw = self.results.get("start_date", None)
+                    end_date_raw = self.results.get("end_date", None)
+                    if start_date_raw is not None:
+                        start_date = pd.to_datetime(start_date_raw).strftime("%Y-%m-%d")
+                    else:
+                        start_date = returns.index.min().strftime("%Y-%m-%d")
+                    if end_date_raw is not None:
+                        end_date = pd.to_datetime(end_date_raw).strftime("%Y-%m-%d")
+                    else:
+                        end_date = returns.index.max().strftime("%Y-%m-%d")
                     
                     benchmark_data = fetcher.get_yahoo_data(benchmark_symbol, start=start_date, end=end_date)
                     if benchmark_data is not None and len(benchmark_data) > 1:
