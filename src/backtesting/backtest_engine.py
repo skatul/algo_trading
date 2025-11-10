@@ -27,6 +27,13 @@ class BacktestEngine:
             initial_capital: Starting capital for backtesting
             commission: Commission rate per trade (as decimal, e.g., 0.001 = 0.1%)
         """
+        # Input validation
+        if initial_capital <= 0:
+            raise ValueError(f"initial_capital must be positive, got: {initial_capital}")
+        
+        if commission < 0 or commission >= 1:
+            raise ValueError(f"commission must be between 0 and 1 (exclusive), got: {commission}")
+        
         self.initial_capital = initial_capital
         self.commission = commission
         self.logger = logging.getLogger(__name__)
@@ -42,26 +49,40 @@ class BacktestEngine:
         """
         Safely convert a value to float, handling NaN and infinity cases.
         
+        For array-like inputs (pandas Series, numpy arrays):
+        - Series: Extracts first element if non-empty, else returns default
+        - numpy arrays: Extracts single element if size==1, else returns default
+        - Multi-element arrays return default (intended for scalar conversion only)
+        
         Args:
-            value: Value to convert (can be from QuantStats or other sources)
+            value: Value to convert (scalar, Series, array from QuantStats, etc.)
             default: Default value to return if conversion fails or value is NaN/inf
             
         Returns:
-            Converted float value or default if value is NaN or infinity
+            Converted float value or default if value is NaN/infinity/unconvertible
+            
+        Note:
+            This method is designed for converting QuantStats metrics to float.
+            Non-scalar arrays are intentionally converted to default for safety.
         """
         # Handle pandas Series by extracting first value
         if hasattr(value, 'iloc'):
             if len(value) == 0:
+                logging.warning("Empty pandas Series provided to _safe_float_conversion, using default")
                 return default
+            logging.debug(f"Extracting first element from pandas Series of length {len(value)}")
             return BacktestEngine._safe_float_conversion(value.iloc[0], default)
             
         # Handle numpy arrays
         if isinstance(value, np.ndarray):
             if value.size == 0:
+                logging.warning("Empty numpy array provided to _safe_float_conversion, using default")
                 return default
             elif value.size == 1:
+                logging.debug("Extracting single element from numpy array")
                 return BacktestEngine._safe_float_conversion(value.item(), default)
             else:
+                logging.warning(f"Multi-element numpy array (size {value.size}) provided to _safe_float_conversion, using default")
                 return default
         
         # Check for NaN using pandas (for scalars)
@@ -103,6 +124,25 @@ class BacktestEngine:
         Returns:
             Dictionary with backtest results
         """
+        # Input validation
+        if strategy is None:
+            raise ValueError("Strategy cannot be None")
+        
+        if not hasattr(strategy, 'run_strategy'):
+            raise ValueError("Strategy must have a 'run_strategy' method")
+            
+        if not hasattr(strategy, 'name'):
+            raise ValueError("Strategy must have a 'name' attribute")
+        
+        if data is None or data.empty:
+            raise ValueError("Data cannot be None or empty")
+        
+        # Check required columns
+        required_columns = ['close']  # Basic requirement
+        missing_columns = [col for col in required_columns if col not in data.columns]
+        if missing_columns:
+            raise ValueError(f"Data missing required columns: {missing_columns}")
+        
         self.logger.info(f"Starting backtest for strategy: {strategy.name}")
 
         # Filter data by date range if provided
@@ -192,12 +232,25 @@ class BacktestEngine:
     def _simulate_trading(self, signal_data: pd.DataFrame) -> pd.DataFrame:
         """
         Simulate trading based on generated signals.
+        
+        This method executes a simplified trading simulation where:
+        - Signal 1 triggers a buy (if not already holding position)
+        - Signal -1 triggers a sell (if currently holding position)
+        - Commission is deducted from each trade
+        - Portfolio value and returns are tracked over time
 
         Args:
-            signal_data: DataFrame with signals and price data
+            signal_data: DataFrame with columns including 'signal', 'close', and 'date'
+                        - 'signal': 1 for buy, -1 for sell, 0 for hold
+                        - 'close': closing price for the period
+                        - date index for time series
 
         Returns:
-            DataFrame with portfolio performance data
+            DataFrame with additional columns:
+                - 'position': number of shares held
+                - 'cash': available cash
+                - 'portfolio_value': total portfolio value (cash + position value)
+                - 'returns': period-over-period returns
         """
         df = signal_data.copy()
 
@@ -279,12 +332,25 @@ class BacktestEngine:
     def _calculate_performance_metrics(self, portfolio_data: pd.DataFrame) -> Dict:
         """
         Calculate comprehensive performance metrics using QuantStats.
+        
+        Computes 15+ professional portfolio metrics including:
+        - Return metrics: total, annualized returns
+        - Risk-adjusted metrics: Sharpe, Sortino, Calmar ratios  
+        - Risk metrics: volatility, max drawdown, VaR/CVaR
+        - Distribution metrics: skewness, kurtosis
+        - Trade statistics: win rate, profit factor
+        
+        Uses QuantStats library with fallback calculations for robustness.
 
         Args:
-            portfolio_data: DataFrame with portfolio performance data
+            portfolio_data: DataFrame with columns 'returns', 'portfolio_value', etc.
+                          from trading simulation
 
         Returns:
-            Dictionary with performance metrics
+            Dictionary with comprehensive performance metrics:
+                - All values are properly converted to float via _safe_float_conversion
+                - VaR/CVaR reported as raw negative values (losses)
+                - Ratios can be inf for edge cases (handled gracefully)
         """
         # Prepare returns data for QuantStats
         returns = portfolio_data["returns"].dropna()
@@ -323,7 +389,10 @@ class BacktestEngine:
             calmar_ratio = qs.stats.calmar(returns)
             max_drawdown = qs.stats.max_drawdown(returns)
             
-            # Risk metrics
+            # Risk metrics (VaR/CVaR are reported as raw negative values for losses)
+            # VaR: Value at Risk at 95% confidence level (5th percentile of returns)
+            # CVaR: Conditional Value at Risk (expected return in worst 5% of cases)
+            # Note: Negative values indicate losses, consistent with risk convention
             var_95 = qs.stats.var(returns)
             cvar_95 = qs.stats.cvar(returns)
             
@@ -357,7 +426,9 @@ class BacktestEngine:
             # Set defaults for enhanced metrics
             sortino_ratio = sharpe_ratio  # Approximation
             calmar_ratio = annualized_return / abs(max_drawdown) if max_drawdown != 0 else 0
-            var_95 = returns.quantile(0.05) if len(returns) > 0 else 0
+            
+            # Fallback VaR/CVaR calculations (maintaining negative values for losses)
+            var_95 = returns.quantile(0.05) if len(returns) > 0 else 0  # 5th percentile
             cvar_95 = returns[returns <= var_95].mean() if len(returns[returns <= var_95]) > 0 else var_95
             skewness = returns.skew() if len(returns) > 2 else 0
             kurtosis = returns.kurtosis() if len(returns) > 2 else 0
@@ -494,8 +565,8 @@ class BacktestEngine:
         print(f"Calmar Ratio: {self.results['calmar_ratio']:.3f}")
         print(f"\n⚠️  RISK METRICS:")
         print(f"Max Drawdown: {self.results['max_drawdown']*100:.2f}%")
-        print(f"VaR (95%): {self.results['var_95']*100:.2f}%")
-        print(f"CVaR (95%): {self.results['cvar_95']*100:.2f}%")
+        print(f"VaR (95%): {self.results['var_95']*100:.2f}% (worst loss at 95% confidence)")
+        print(f"CVaR (95%): {self.results['cvar_95']*100:.2f}% (expected loss in worst 5%)")
         print(f"\n📊 DISTRIBUTION METRICS:")
         print(f"Skewness: {self.results['skewness']:.3f}")
         print(f"Kurtosis: {self.results['kurtosis']:.3f}")
@@ -597,8 +668,23 @@ class BacktestEngine:
         if not self.results:
             raise ValueError("No backtest results available. Run backtest first.")
         
-        # Prepare returns data
-        returns = self.results["data"]["returns"].dropna()
+        # Prepare returns data with defensive checks
+        if "data" not in self.results:
+            raise ValueError("No results data available. Ensure backtest has been run.")
+            
+        data = self.results["data"]
+        if isinstance(data, pd.DataFrame):
+            if "returns" in data:
+                returns = data["returns"].dropna()
+            elif "close" in data:
+                returns = data["close"].pct_change().dropna()
+            else:
+                raise ValueError("Results data does not contain 'returns' or 'close' series.")
+        elif isinstance(data, pd.Series):
+            returns = data.dropna()
+        else:
+            raise ValueError(f"Unrecognized results['data'] format: {type(data)}. Expected DataFrame or Series.")
+        
         returns.name = "Strategy Returns"
         
         # Set default output path
@@ -618,8 +704,24 @@ class BacktestEngine:
                     from src.data.data_fetcher import DataFetcher
                     
                     fetcher = DataFetcher()
-                    start_date = self.results["start_date"].strftime("%Y-%m-%d")
-                    end_date = self.results["end_date"].strftime("%Y-%m-%d")
+                    
+                    # Safely handle start/end dates with fallback to returns index
+                    try:
+                        if "start_date" in self.results and self.results["start_date"] is not None:
+                            start_date = pd.to_datetime(self.results["start_date"]).strftime("%Y-%m-%d")
+                        else:
+                            start_date = returns.index.min().strftime("%Y-%m-%d")
+                            self.logger.warning("Using returns index min as start_date fallback")
+                            
+                        if "end_date" in self.results and self.results["end_date"] is not None:
+                            end_date = pd.to_datetime(self.results["end_date"]).strftime("%Y-%m-%d")
+                        else:
+                            end_date = returns.index.max().strftime("%Y-%m-%d")
+                            self.logger.warning("Using returns index max as end_date fallback")
+                    except Exception as e:
+                        self.logger.warning(f"Date conversion failed: {e}. Using returns index bounds.")
+                        start_date = returns.index.min().strftime("%Y-%m-%d")
+                        end_date = returns.index.max().strftime("%Y-%m-%d")
                     
                     benchmark_data = fetcher.get_yahoo_data(benchmark_symbol, start=start_date, end=end_date)
                     if benchmark_data is not None and len(benchmark_data) > 1:
@@ -702,8 +804,8 @@ def compare_strategies(
                 "Sortino Ratio": result["sortino_ratio"],
                 "Calmar Ratio": result["calmar_ratio"],
                 "Max Drawdown (%)": result["max_drawdown"] * 100,
-                "VaR 95% (%)": result["var_95"] * 100,
-                "CVaR 95% (%)": result["cvar_95"] * 100,
+                "VaR 95% (%) [Loss Risk]": result["var_95"] * 100,
+                "CVaR 95% (%) [Expected Loss]": result["cvar_95"] * 100,
                 "Win Rate (%)": result["win_rate"] * 100,
                 "Profit Factor": result["profit_factor"],
                 "Total Trades": result["total_trades"],
