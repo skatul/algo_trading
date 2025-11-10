@@ -42,7 +42,7 @@ class TestBacktestEngine(unittest.TestCase):
         # Create a mock strategy
         self.mock_strategy = Mock(spec=BaseStrategy)
         self.mock_strategy.name = "TestStrategy"
-        self.mock_strategy.run.return_value = self.sample_data
+        self.mock_strategy.run_strategy.return_value = self.sample_data
 
     def test_engine_initialization(self):
         """Test BacktestEngine initialization."""

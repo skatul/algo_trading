@@ -6,6 +6,7 @@ It provides a unified interface for running backtests, live trading, and analysi
 """
 
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Union, Any
@@ -152,7 +153,9 @@ class TradingEngine:
         """
         # Get initial capital from config if not provided
         if initial_capital is None:
-            initial_capital = self.config.get("trading.initial_capital", 100000)
+            initial_capital = float(self.config.get("trading.initial_capital", 100000))
+        else:
+            initial_capital = float(initial_capital)
 
         # Create strategy if string provided
         if isinstance(strategy, str):
@@ -379,6 +382,102 @@ class TradingEngine:
         results = self.compare_strategies_on_symbol(strategy_configs, symbol)
 
         return results
+
+    def compare_strategies(self, symbol: str, strategies: List[Dict]) -> pd.DataFrame:
+        """
+        Compare multiple strategies on a symbol.
+        
+        Args:
+            symbol: Stock symbol to test strategies on
+            strategies: List of strategy configurations
+            
+        Returns:
+            DataFrame with comparison results
+        """
+        return self.compare_strategies_on_symbol(strategies, symbol)
+
+    def calculate_portfolio_metrics(self, portfolio_values: pd.Series) -> Dict:
+        """
+        Calculate portfolio performance metrics.
+        
+        Args:
+            portfolio_values: Series of portfolio values over time
+            
+        Returns:
+            Dictionary of calculated metrics
+        """
+        if len(portfolio_values) < 2:
+            return {}
+            
+        # Calculate returns
+        returns = portfolio_values.pct_change().dropna()
+        
+        # Basic metrics
+        total_return = (portfolio_values.iloc[-1] / portfolio_values.iloc[0]) - 1
+        
+        # Annualized metrics (assuming daily data)
+        trading_days = len(returns)
+        years = trading_days / 252
+        annualized_return = (1 + total_return) ** (1 / years) - 1 if years > 0 else 0
+        
+        volatility = returns.std() * np.sqrt(252)
+        sharpe_ratio = (annualized_return - 0.02) / volatility if volatility > 0 else 0
+        
+        # Drawdown calculation
+        peak = portfolio_values.expanding().max()
+        drawdown = (portfolio_values - peak) / peak
+        max_drawdown = drawdown.min()
+        
+        return {
+            "total_return": total_return,
+            "annualized_return": annualized_return,
+            "volatility": volatility,
+            "sharpe_ratio": sharpe_ratio,
+            "max_drawdown": max_drawdown,
+            "final_value": portfolio_values.iloc[-1],
+            "peak_value": peak.iloc[-1],
+        }
+
+    def get_market_data_with_indicators(self, symbol: str, **kwargs) -> pd.DataFrame:
+        """
+        Get market data with technical indicators added.
+        
+        Args:
+            symbol: Stock symbol to fetch
+            **kwargs: Additional parameters for data fetching
+            
+        Returns:
+            DataFrame with market data and indicators
+        """
+        # Fetch basic market data
+        data = self.data_fetcher.get_yahoo_data(symbol, **kwargs)
+        
+        if data is None or data.empty:
+            return pd.DataFrame()
+            
+        # Add technical indicators
+        data_with_indicators = self.data_fetcher.add_technical_indicators(data)
+        
+        return data_with_indicators
+
+    def validate_strategy_parameters(self, strategy_name: str, parameters: Dict) -> bool:
+        """
+        Validate strategy parameters.
+        
+        Args:
+            strategy_name: Name of the strategy
+            parameters: Parameters dictionary to validate
+            
+        Returns:
+            True if parameters are valid, False otherwise
+        """
+        try:
+            # Try to create the strategy with the given parameters
+            strategy = self.create_strategy(strategy_name, **parameters)
+            return True
+        except Exception as e:
+            self.logger.warning(f"Invalid parameters for {strategy_name}: {e}")
+            return False
 
 
 def main():

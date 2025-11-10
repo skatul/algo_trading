@@ -10,4 +10,5 @@ requests>=2.31.0
 python-dotenv>=1.0.0
 alpaca-trade-api>=3.1.1
 backtrader>=1.9.78
-pyfolio>=0.9.2
+quantstats>=0.0.62
+ipython>=8.0.0
