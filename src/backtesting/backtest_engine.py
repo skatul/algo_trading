@@ -348,18 +348,62 @@ class BacktestEngine:
 
         # Helper function to safely convert to float
         def safe_float(value) -> float:
-            """Safely convert value to float, handling Series, complex, and other types."""
-            if hasattr(value, 'iloc') and len(value) > 0:  # pandas Series
-                return float(value.iloc[0])
-            elif hasattr(value, 'real'):  # complex numbers
-                return float(value.real)
-            elif isinstance(value, (int, float)):
-                return float(value)
-            else:
+            """
+            Safely convert a value to float, handling edge cases robustly.
+            
+            Args:
+                value: Value to convert (Series, ndarray, complex, scalar, etc.)
+                
+            Returns:
+                Float value or 0.0 if invalid/unconvertible
+            """
+            import math
+            import numbers
+            
+            # Default for invalid values
+            default = 0.0
+            
+            if value is None:
+                return default
+                
+            # Handle pandas Series/Index or other array-like with iloc
+            if hasattr(value, 'iloc'):
                 try:
-                    return float(value)
-                except (TypeError, ValueError):
-                    return 0.0
+                    if len(value) == 0:
+                        return default
+                    scalar = value.iloc[0]
+                    return safe_float(scalar)  # Recursive call for extracted scalar
+                except Exception:
+                    return default
+                    
+            # Handle numeric scalars explicitly
+            if isinstance(value, (int, float)):
+                try:
+                    f = float(value)
+                    if math.isnan(f) or math.isinf(f):
+                        return default
+                    return f
+                except Exception:
+                    return default
+            
+            # Handle complex numbers
+            if isinstance(value, complex):
+                try:
+                    f = float(value.real)
+                    if math.isnan(f) or math.isinf(f):
+                        return default
+                    return f
+                except Exception:
+                    return default
+                    
+            # Fallback: try direct conversion and validate
+            try:
+                f = float(value)
+                if math.isnan(f) or math.isinf(f):
+                    return default
+                return f
+            except Exception:
+                return default
 
         return {
             "total_return": safe_float(total_return),
