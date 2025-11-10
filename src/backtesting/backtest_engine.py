@@ -157,6 +157,7 @@ class BacktestEngine:
             "max_drawdown": performance["max_drawdown"],
             "total_trades": performance["total_trades"],
             "winning_trades": performance["winning_trades"],
+            "losing_trades": performance["losing_trades"],
             "win_rate": performance["win_rate"],
             "profit_factor": performance["profit_factor"],
             "data": portfolio_data,
@@ -318,6 +319,7 @@ class BacktestEngine:
                 "cvar_95": 0.0,
                 "total_trades": 0,
                 "winning_trades": 0,
+                "losing_trades": 0,
                 "win_rate": 0.0,
                 "profit_factor": 0.0,
                 "skewness": 0.0,
@@ -388,6 +390,7 @@ class BacktestEngine:
         sell_trades = [t for t in self.trades if t["action"] == "SELL"]
 
         winning_trades = 0
+        losing_trades = 0
         trade_returns = []
 
         for i, sell in enumerate(sell_trades):
@@ -397,6 +400,8 @@ class BacktestEngine:
                 trade_returns.append(trade_return)
                 if trade_return > 0:
                     winning_trades += 1
+                elif trade_return < 0:
+                    losing_trades += 1
 
         win_rate = winning_trades / len(trade_returns) if trade_returns else 0
 
@@ -429,6 +434,7 @@ class BacktestEngine:
             "worst_day": self._safe_float_conversion(worst_day),
             "total_trades": total_trades,
             "winning_trades": winning_trades,
+            "losing_trades": losing_trades,
             "win_rate": win_rate,
             "profit_factor": profit_factor,
         }
@@ -507,18 +513,27 @@ class BacktestEngine:
         print(f"Annualized Return: {self.results['annualized_return']*100:.2f}%")
         print(f"Volatility: {self.results['volatility']*100:.2f}%")
         print(f"\n📈 RISK-ADJUSTED METRICS:")
-        print(f"Sharpe Ratio: {self.results['sharpe_ratio']:.3f}")
-        print(f"Sortino Ratio: {self.results['sortino_ratio']:.3f}")
-        print(f"Calmar Ratio: {self.results['calmar_ratio']:.3f}")
+        print(f"Sharpe Ratio: {self.results.get('sharpe_ratio', 'N/A')}")
+        if 'sortino_ratio' in self.results:
+            print(f"Sortino Ratio: {self.results['sortino_ratio']:.3f}")
+        if 'calmar_ratio' in self.results:
+            print(f"Calmar Ratio: {self.results['calmar_ratio']:.3f}")
         print(f"\n⚠️  RISK METRICS:")
         print(f"Max Drawdown: {self.results['max_drawdown']*100:.2f}%")
-        print(f"VaR (95%): {self.results['var_95']*100:.2f}% (worst loss at 95% confidence)")
-        print(f"CVaR (95%): {self.results['cvar_95']*100:.2f}% (expected loss in worst 5%)")
-        print(f"\n📊 DISTRIBUTION METRICS:")
-        print(f"Skewness: {self.results['skewness']:.3f}")
-        print(f"Kurtosis: {self.results['kurtosis']:.3f}")
-        print(f"Best Day: {self.results['best_day']*100:.2f}%")
-        print(f"Worst Day: {self.results['worst_day']*100:.2f}%")
+        if 'var_95' in self.results:
+            print(f"VaR (95%): {self.results['var_95']*100:.2f}% (worst loss at 95% confidence)")
+        if 'cvar_95' in self.results:
+            print(f"CVaR (95%): {self.results['cvar_95']*100:.2f}% (expected loss in worst 5%)")
+        if any(key in self.results for key in ['skewness', 'kurtosis', 'best_day', 'worst_day']):
+            print(f"\n📊 DISTRIBUTION METRICS:")
+            if 'skewness' in self.results:
+                print(f"Skewness: {self.results['skewness']:.3f}")
+            if 'kurtosis' in self.results:
+                print(f"Kurtosis: {self.results['kurtosis']:.3f}")
+            if 'best_day' in self.results:
+                print(f"Best Day: {self.results['best_day']*100:.2f}%")
+            if 'worst_day' in self.results:
+                print(f"Worst Day: {self.results['worst_day']*100:.2f}%")
         print(f"\n🔄 TRADE STATISTICS:")
         print(f"Total Trades: {self.results['total_trades']}")
         print(f"Winning Trades: {self.results['winning_trades']}")
@@ -666,8 +681,12 @@ class BacktestEngine:
         """Calculate current portfolio value."""
         return self.cash + (self.shares * current_price)
 
-    def calculate_max_drawdown(self, portfolio_values: pd.Series) -> float:
+    def calculate_max_drawdown(self, portfolio_values) -> float:
         """Calculate maximum drawdown from portfolio values."""
+        # Convert to pandas Series if it's a list
+        if not isinstance(portfolio_values, pd.Series):
+            portfolio_values = pd.Series(portfolio_values)
+            
         peak = portfolio_values.expanding().max()
         drawdown = (portfolio_values - peak) / peak
         return drawdown.min()
@@ -685,8 +704,41 @@ class BacktestEngine:
             
         return (mean_return - risk_free_rate) / volatility
 
-    def calculate_metrics(self, portfolio_data: pd.DataFrame) -> Dict:
+    def calculate_metrics(self, portfolio_values=None, returns=None) -> Dict:
         """Calculate metrics (legacy interface)."""
+        if portfolio_values is not None and returns is not None:
+            # Legacy interface with separate portfolio values and returns
+            # Ensure we handle different array lengths properly
+            if isinstance(returns, pd.Series):
+                returns_data = returns
+            else:
+                returns_data = pd.Series(returns)
+                
+            if isinstance(portfolio_values, (list, np.ndarray)):
+                # Create aligned portfolio data - returns should be one less than values
+                if len(portfolio_values) == len(returns_data) + 1:
+                    # Use returns as-is and align portfolio values
+                    portfolio_data = pd.DataFrame({
+                        'returns': returns_data,
+                        'portfolio_value': portfolio_values[1:]  # Skip first value
+                    })
+                elif len(portfolio_values) == len(returns_data):
+                    portfolio_data = pd.DataFrame({
+                        'returns': returns_data,
+                        'portfolio_value': portfolio_values
+                    })
+                else:
+                    # Fallback - just use returns
+                    portfolio_data = pd.DataFrame({'returns': returns_data})
+            else:
+                portfolio_data = pd.DataFrame({'returns': returns_data})
+        elif isinstance(portfolio_values, pd.DataFrame):
+            # Modern interface with portfolio_data DataFrame
+            portfolio_data = portfolio_values
+        else:
+            # Fallback to empty DataFrame
+            portfolio_data = pd.DataFrame({'returns': []})
+            
         return self._calculate_performance_metrics(portfolio_data)
     
 

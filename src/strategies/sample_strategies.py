@@ -59,6 +59,10 @@ class MovingAverageCrossoverStrategy(BaseStrategy):
         df[f"sma_{self.long_window}"] = (
             df["close"].rolling(window=self.long_window).mean()
         )
+        
+        # Add aliases for backward compatibility
+        df["sma_short"] = df[f"sma_{self.short_window}"]
+        df["sma_long"] = df[f"sma_{self.long_window}"]
 
         return df
 

@@ -351,6 +351,9 @@ class BaseStrategy(ABC):
             "avg_pnl": avg_pnl,
             "avg_winning_trade": avg_winning_trade,
             "avg_losing_trade": avg_losing_trade,
+            # Legacy aliases for backward compatibility
+            "avg_win": avg_winning_trade,
+            "avg_loss": avg_losing_trade,
             "profit_factor": profit_factor,
             "max_winning_streak": max_winning_streak,
             "max_losing_streak": max_losing_streak,

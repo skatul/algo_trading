@@ -130,61 +130,61 @@ class TradingEngine:
 
     def backtest(
         self,
-        strategy: Union[str, BaseStrategy],
+        strategy_name: str,
         symbol: str,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         initial_capital: Optional[float] = None,
-        **strategy_params,
-    ) -> Dict:
+        **kwargs
+    ) -> Optional[Dict]:
         """
-        Run a backtest on the given strategy and symbol.
+        Run a backtest on a single strategy and symbol.
 
         Args:
-            strategy: Strategy name or instance
-            symbol: Stock symbol to test
-            start_date: Start date for backtesting
-            end_date: End date for backtesting
-            initial_capital: Starting capital
-            **strategy_params: Strategy parameters
+            strategy_name: Name of the strategy to test
+            symbol: Stock symbol
+            start_date: Start date for backtesting (YYYY-MM-DD)
+            end_date: End date for backtesting (YYYY-MM-DD)
+            initial_capital: Initial capital for backtesting
+            **kwargs: Additional parameters for strategy
 
         Returns:
-            Backtest results dictionary
+            Dictionary with backtest results, or None if error occurs
         """
-        # Get initial capital from config if not provided
-        if initial_capital is None:
-            initial_capital = float(self.config.get("trading.initial_capital", 100000))
-        else:
-            initial_capital = float(initial_capital)
+        try:
+            # Use configured initial capital if not provided
+            if initial_capital is None:
+                initial_capital = self.config.get("trading.initial_capital", 100000)
 
-        # Create strategy if string provided
-        if isinstance(strategy, str):
-            strategy_obj = self.create_strategy(strategy, **strategy_params)
-        else:
-            strategy_obj = strategy
+            # Create strategy instance
+            strategy_obj = self.create_strategy(strategy_name, **kwargs)
 
-        # Fetch data if not already loaded or if symbol is different
-        if (
-            self.current_data.empty
-            or symbol not in self.current_data.get("symbol", pd.Series()).values
-        ):
-            self.fetch_data(symbol)
+            # Fetch data if not already loaded or if symbol is different
+            if (
+                self.current_data.empty
+                or symbol not in self.current_data.get("symbol", pd.Series()).values
+            ):
+                self.fetch_data(symbol)
 
-        # Initialize backtest engine
-        commission = self.config.get("trading.commission", 0.001)
-        self.backtest_engine = BacktestEngine(
-            initial_capital=initial_capital, commission=commission
-        )
+            # Initialize backtest engine
+            commission = self.config.get("trading.commission", 0.001)
+            capital = initial_capital if initial_capital is not None else 100000
+            self.backtest_engine = BacktestEngine(
+                initial_capital=capital, commission=commission
+            )
 
-        # Run backtest
-        results = self.backtest_engine.run_backtest(
-            strategy_obj, self.current_data, start_date, end_date
-        )
+            # Run backtest
+            results = self.backtest_engine.run_backtest(
+                strategy_obj, self.current_data, start_date, end_date
+            )
 
-        # Store results
-        self.backtest_results[f"{strategy_obj.name}_{symbol}"] = results
+            # Store results
+            self.backtest_results[f"{strategy_obj.name}_{symbol}"] = results
 
-        return results
+            return results
+        except Exception as e:
+            self.logger.error(f"Backtest failed for {strategy_name} on {symbol}: {e}")
+            return None
 
     def compare_strategies_on_symbol(
         self, strategies: List[Dict[str, Any]], symbol: str, **kwargs
@@ -396,16 +396,22 @@ class TradingEngine:
         """
         return self.compare_strategies_on_symbol(strategies, symbol)
 
-    def calculate_portfolio_metrics(self, portfolio_values: pd.Series) -> Dict:
+    def calculate_portfolio_metrics(self, portfolio_values) -> Dict:
         """
         Calculate portfolio performance metrics.
         
         Args:
-            portfolio_values: Series of portfolio values over time
+            portfolio_values: Series or list of portfolio values over time
             
         Returns:
             Dictionary of calculated metrics
         """
+        # Convert to Series if it's a list
+        if isinstance(portfolio_values, list):
+            portfolio_values = pd.Series(portfolio_values)
+        elif not isinstance(portfolio_values, pd.Series):
+            portfolio_values = pd.Series(list(portfolio_values))
+            
         if len(portfolio_values) < 2:
             return {}
             

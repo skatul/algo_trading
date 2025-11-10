@@ -13,8 +13,8 @@ from datetime import datetime
 # Add the src directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from strategies.base_strategy import BaseStrategy, PositionType
-from strategies.sample_strategies import (
+from src.strategies.base_strategy import BaseStrategy, PositionType
+from src.strategies.sample_strategies import (
     MovingAverageCrossoverStrategy,
     SimpleRSIStrategy,
     BuyAndHoldStrategy,
@@ -159,7 +159,7 @@ class TestBaseStrategy(unittest.TestCase):
 
         self.assertEqual(metrics["total_trades"], 3)
         self.assertEqual(metrics["winning_trades"], 2)
-        self.assertAlmostEqual(metrics["win_rate"], 66.67, places=1)
+        self.assertAlmostEqual(metrics["win_rate"], 0.6667, places=4)
         self.assertEqual(metrics["total_pnl"], 20)
 
 

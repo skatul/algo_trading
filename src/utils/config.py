@@ -193,12 +193,12 @@ class Config:
             api_keys["alpha_vantage"] = alpha_vantage_key
             
         alpaca_key = os.getenv("ALPACA_API_KEY")
-        alpaca_secret = os.getenv("ALPACA_SECRET_KEY")
-        if alpaca_key and alpaca_secret:
-            api_keys["alpaca"] = {
-                "key": alpaca_key,
-                "secret": alpaca_secret
-            }
+        if alpaca_key:
+            api_keys["alpaca_api"] = alpaca_key
+            
+        alpaca_secret = os.getenv("ALPACA_SECRET_KEY") 
+        if alpaca_secret:
+            api_keys["alpaca_secret"] = alpaca_secret
             
         return api_keys
     
@@ -249,6 +249,26 @@ class Config:
     def logging(self) -> Dict:
         """Get logging configuration (property for backward compatibility)."""
         return self.config.get("logging", {})
+    
+    @trading.setter
+    def trading(self, value: Dict):
+        """Set trading configuration."""
+        self.config["trading"] = value
+    
+    @data.setter  
+    def data(self, value: Dict):
+        """Set data configuration."""
+        self.config["data"] = value
+        
+    @backtesting.setter
+    def backtesting(self, value: Dict):
+        """Set backtesting configuration."""
+        self.config["backtesting"] = value
+        
+    @logging.setter
+    def logging(self, value: Dict):
+        """Set logging configuration."""
+        self.config["logging"] = value
 
     def to_dict(self) -> Dict:
         """Return configuration as dictionary."""
@@ -304,6 +324,7 @@ def setup_logging(config: Config) -> logging.Logger:
 
     # Create application logger
     app_logger = logging.getLogger("algo_trading")
+    app_logger.setLevel(getattr(logging, log_level.upper()))
     app_logger.info("Logging system initialized")
 
     return app_logger
