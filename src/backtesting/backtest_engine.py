@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import quantstats as qs
 from typing import Dict, List, Optional
 import logging
+import math
 
 
 class BacktestEngine:
@@ -34,6 +35,34 @@ class BacktestEngine:
         self.portfolio_values = []
         self.positions = []
         self.results = {}
+
+    @staticmethod
+    def _safe_float_conversion(value, default: float = 0.0) -> float:
+        """
+        Safely convert a value to float, handling NaN and infinity cases.
+        
+        Args:
+            value: Value to convert (can be from QuantStats or other sources)
+            default: Default value to return if conversion fails or value is NaN/inf
+            
+        Returns:
+            Converted float value or default if value is NaN or infinity
+        """
+        # Check for NaN using pandas
+        if pd.isna(value):
+            return default
+        
+        # Convert to float
+        try:
+            float_value = float(value)
+        except (ValueError, TypeError):
+            return default
+        
+        # Check for infinity using math
+        if math.isinf(float_value):
+            return default
+            
+        return float_value
 
     def run_backtest(
         self,
@@ -347,19 +376,19 @@ class BacktestEngine:
         )
 
         return {
-            "total_return": float(total_return),
-            "annualized_return": float(annualized_return),
-            "volatility": float(volatility),
-            "sharpe_ratio": float(sharpe_ratio),
-            "sortino_ratio": float(sortino_ratio),
-            "calmar_ratio": float(calmar_ratio),
-            "max_drawdown": float(max_drawdown),
-            "var_95": float(var_95),
-            "cvar_95": float(cvar_95),
-            "skewness": float(skewness),
-            "kurtosis": float(kurtosis),
-            "best_day": float(best_day),
-            "worst_day": float(worst_day),
+            "total_return": self._safe_float_conversion(total_return),
+            "annualized_return": self._safe_float_conversion(annualized_return),
+            "volatility": self._safe_float_conversion(volatility),
+            "sharpe_ratio": self._safe_float_conversion(sharpe_ratio),
+            "sortino_ratio": self._safe_float_conversion(sortino_ratio),
+            "calmar_ratio": self._safe_float_conversion(calmar_ratio),
+            "max_drawdown": self._safe_float_conversion(max_drawdown),
+            "var_95": self._safe_float_conversion(var_95),
+            "cvar_95": self._safe_float_conversion(cvar_95),
+            "skewness": self._safe_float_conversion(skewness),
+            "kurtosis": self._safe_float_conversion(kurtosis),
+            "best_day": self._safe_float_conversion(best_day),
+            "worst_day": self._safe_float_conversion(worst_day),
             "total_trades": total_trades,
             "winning_trades": winning_trades,
             "win_rate": win_rate,
