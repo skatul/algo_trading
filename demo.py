@@ -201,7 +201,7 @@ def main():
         # Demo 5: Comprehensive Analysis
         demo_comprehensive_analysis()
 
-        # Demo 6: QuantStats Integration (NEW!)
+        # Demo 5: QuantStats Integration (NEW!)
         demo_quantstats_integration()
         print("✅ All demos completed successfully!")
         print("\nNext steps:")
