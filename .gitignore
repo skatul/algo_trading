@@ -57,3 +57,22 @@ Thumbs.db
 *.db
 backtest_results/
 live_trading_logs/
+
+# Reports and analysis
+reports/*.html
+reports/*.pdf
+plots/*.png
+plots/*.jpg
+plots/*.svg
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+
+# QuantStats cache
+.quantstats/
+
+# Migration artifacts (temporary)
+*migration*
+*MIGRATION*

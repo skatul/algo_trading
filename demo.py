@@ -124,26 +124,84 @@ def demo_comprehensive_analysis():
     print()
 
 
+def demo_quantstats_integration():
+    """Demonstrate QuantStats integration with enhanced analytics."""
+    print("=== QuantStats Integration Demo ===")
+    
+    engine = TradingEngine()
+    
+    print("Running backtest with enhanced QuantStats metrics...")
+    
+    # Run a backtest
+    result = engine.backtest(
+        'moving_average', 
+        'AAPL', 
+        short_window=10, 
+        long_window=30,
+        start_date='2023-01-01'
+    )
+    
+    print("\n📊 Enhanced Performance Summary (powered by QuantStats):")
+    engine.print_summary()
+    
+    print("\n📋 Generating comprehensive QuantStats HTML report...")
+    
+    # Create reports directory
+    reports_dir = "reports"
+    os.makedirs(reports_dir, exist_ok=True)
+    
+    # Generate QuantStats report
+    report_path = engine.generate_quantstats_report(
+        output_path=os.path.join(reports_dir, "aapl_moving_average_report.html"),
+        benchmark_symbol="SPY",
+        title="AAPL Moving Average Strategy - Professional Analysis"
+    )
+    
+    if report_path:
+        print(f"✅ Comprehensive report generated: {report_path}")
+        print("   This report includes:")
+        print("   • Interactive performance charts")
+        print("   • Risk-adjusted metrics (Sharpe, Sortino, Calmar)")
+        print("   • Drawdown analysis")
+        print("   • Monthly/yearly performance breakdown")
+        print("   • Benchmark comparison with SPY")
+        print("   • Distribution analysis")
+        print("   • Rolling performance metrics")
+    else:
+        print("❌ Report generation failed")
+    
+    print(f"\n💡 Key enhancements with QuantStats:")
+    print(f"   • Sortino Ratio: {result['sortino_ratio']:.3f}")
+    print(f"   • Calmar Ratio: {result['calmar_ratio']:.3f}")
+    print(f"   • VaR (95%): {result['var_95']*100:.2f}%")
+    print(f"   • CVaR (95%): {result['cvar_95']*100:.2f}%")
+    print(f"   • Skewness: {result['skewness']:.3f}")
+    print(f"   • Kurtosis: {result['kurtosis']:.3f}")
+    print()
+
+
 def main():
-    """Run all demos."""
-    print("🚀 Algorithmic Trading System Demo")
+    """Run all demo functions."""
+    print("🚀 Algorithmic Trading System - Demo")
     print("=" * 50)
 
     try:
-        # Demo 1: Data Fetching
+        # Demo 1: Basic usage
         demo_data_fetching()
 
-        # Demo 2: Single Strategy
+        # Demo 2: Simple backtest
         demo_single_strategy()
 
-        # Demo 3: Strategy Comparison
+        # Demo 3: Strategy comparison
         demo_strategy_comparison()
 
         # Demo 4: Multiple Symbols
         demo_multiple_symbols()
 
-        # Demo 5: Comprehensive Analysis
-        demo_comprehensive_analysis()
+
+
+        # Demo 6: QuantStats Integration (NEW!)
+        demo_quantstats_integration()
 
         print("✅ All demos completed successfully!")
         print("\nNext steps:")
@@ -152,6 +210,7 @@ def main():
         print("3. Create your own custom strategies")
         print("4. Add risk management rules")
         print("5. Implement live trading capabilities")
+        print("6. Open the generated HTML reports for detailed analysis")
 
     except Exception as e:
         print(f"❌ Demo failed with error: {e}")

@@ -7,11 +7,9 @@ including performance metrics, visualization, and trade analysis.
 
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
-from datetime import datetime
-from typing import Dict, List, Optional, Tuple, Any
+import quantstats as qs
+from typing import Dict, List, Optional
 import logging
-import os
 
 
 class BacktestEngine:
@@ -85,7 +83,15 @@ class BacktestEngine:
             "annualized_return": performance["annualized_return"],
             "volatility": performance["volatility"],
             "sharpe_ratio": performance["sharpe_ratio"],
+            "sortino_ratio": performance["sortino_ratio"],
+            "calmar_ratio": performance["calmar_ratio"],
             "max_drawdown": performance["max_drawdown"],
+            "var_95": performance["var_95"],
+            "cvar_95": performance["cvar_95"],
+            "skewness": performance["skewness"],
+            "kurtosis": performance["kurtosis"],
+            "best_day": performance["best_day"],
+            "worst_day": performance["worst_day"],
             "total_trades": performance["total_trades"],
             "winning_trades": performance["winning_trades"],
             "win_rate": performance["win_rate"],
@@ -223,7 +229,7 @@ class BacktestEngine:
 
     def _calculate_performance_metrics(self, portfolio_data: pd.DataFrame) -> Dict:
         """
-        Calculate comprehensive performance metrics.
+        Calculate comprehensive performance metrics using QuantStats.
 
         Args:
             portfolio_data: DataFrame with portfolio performance data
@@ -231,35 +237,86 @@ class BacktestEngine:
         Returns:
             Dictionary with performance metrics
         """
-        # Basic return calculations
-        initial_value = portfolio_data["portfolio_value"].iloc[0]
-        final_value = portfolio_data["portfolio_value"].iloc[-1]
-        total_return = (final_value - initial_value) / initial_value
+        # Prepare returns data for QuantStats
+        returns = portfolio_data["returns"].dropna()
+        returns.name = "Strategy Returns"
+        
+        # Handle edge case where there are no returns
+        if len(returns) == 0:
+            return {
+                "total_return": 0.0,
+                "annualized_return": 0.0,
+                "volatility": 0.0,
+                "sharpe_ratio": 0.0,
+                "sortino_ratio": 0.0,
+                "calmar_ratio": 0.0,
+                "max_drawdown": 0.0,
+                "var_95": 0.0,
+                "cvar_95": 0.0,
+                "total_trades": 0,
+                "winning_trades": 0,
+                "win_rate": 0.0,
+                "profit_factor": 0.0,
+                "skewness": 0.0,
+                "kurtosis": 0.0,
+                "best_day": 0.0,
+                "worst_day": 0.0,
+            }
 
-        # Annualized return
-        days = len(portfolio_data)
-        years = days / 252  # Assume 252 trading days per year
-        annualized_return = (1 + total_return) ** (1 / years) - 1 if years > 0 else 0
+        # Use QuantStats for robust performance calculation
+        try:
+            # Core performance metrics
+            total_return = qs.stats.comp(returns)
+            annualized_return = qs.stats.cagr(returns)
+            volatility = qs.stats.volatility(returns)
+            sharpe_ratio = qs.stats.sharpe(returns)
+            sortino_ratio = qs.stats.sortino(returns)
+            calmar_ratio = qs.stats.calmar(returns)
+            max_drawdown = qs.stats.max_drawdown(returns)
+            
+            # Risk metrics
+            var_95 = qs.stats.var(returns)
+            cvar_95 = qs.stats.cvar(returns)
+            
+            # Distribution metrics
+            skewness = qs.stats.skew(returns)
+            kurtosis = qs.stats.kurtosis(returns)
+            best_day = qs.stats.best(returns)
+            worst_day = qs.stats.worst(returns)
+            
+        except Exception as e:
+            self.logger.warning(f"QuantStats calculation failed: {e}. Using fallback calculations.")
+            # Fallback to basic calculations if QuantStats fails
+            initial_value = portfolio_data["portfolio_value"].iloc[0]
+            final_value = portfolio_data["portfolio_value"].iloc[-1]
+            total_return = (final_value - initial_value) / initial_value
+            
+            days = len(portfolio_data)
+            years = days / 252
+            annualized_return = (1 + total_return) ** (1 / years) - 1 if years > 0 else 0
+            
+            volatility = returns.std() * (252**0.5) if len(returns) > 1 else 0
+            risk_free_rate = 0.02
+            excess_return = annualized_return - risk_free_rate
+            sharpe_ratio = excess_return / volatility if volatility > 0 else 0
+            
+            portfolio_values = portfolio_data["portfolio_value"]
+            peak = portfolio_values.expanding().max()
+            drawdown = (portfolio_values - peak) / peak
+            max_drawdown = drawdown.min()
+            
+            # Set defaults for enhanced metrics
+            sortino_ratio = sharpe_ratio  # Approximation
+            calmar_ratio = annualized_return / abs(max_drawdown) if max_drawdown != 0 else 0
+            var_95 = returns.quantile(0.05) if len(returns) > 0 else 0
+            cvar_95 = returns[returns <= var_95].mean() if len(returns) > 0 else 0
+            skewness = returns.skew() if len(returns) > 2 else 0
+            kurtosis = returns.kurtosis() if len(returns) > 2 else 0
+            best_day = returns.max() if len(returns) > 0 else 0
+            worst_day = returns.min() if len(returns) > 0 else 0
 
-        # Volatility (annualized)
-        daily_returns = portfolio_data["returns"].dropna()
-        volatility = daily_returns.std() * (252**0.5) if len(daily_returns) > 1 else 0
-
-        # Sharpe ratio (assume 2% risk-free rate)
-        risk_free_rate = 0.02
-        excess_return = annualized_return - risk_free_rate
-        sharpe_ratio = excess_return / volatility if volatility > 0 else 0
-
-        # Maximum drawdown
-        portfolio_values = portfolio_data["portfolio_value"]
-        peak = portfolio_values.expanding().max()
-        drawdown = (portfolio_values - peak) / peak
-        max_drawdown = drawdown.min()
-
-        # Trade statistics
+        # Trade statistics (keep existing logic)
         total_trades = len(self.trades)
-
-        # Calculate trade P&L
         buy_trades = [t for t in self.trades if t["action"] == "BUY"]
         sell_trades = [t for t in self.trades if t["action"] == "SELL"]
 
@@ -290,11 +347,19 @@ class BacktestEngine:
         )
 
         return {
-            "total_return": total_return,
-            "annualized_return": annualized_return,
-            "volatility": volatility,
-            "sharpe_ratio": sharpe_ratio,
-            "max_drawdown": max_drawdown,
+            "total_return": float(total_return),
+            "annualized_return": float(annualized_return),
+            "volatility": float(volatility),
+            "sharpe_ratio": float(sharpe_ratio),
+            "sortino_ratio": float(sortino_ratio),
+            "calmar_ratio": float(calmar_ratio),
+            "max_drawdown": float(max_drawdown),
+            "var_95": float(var_95),
+            "cvar_95": float(cvar_95),
+            "skewness": float(skewness),
+            "kurtosis": float(kurtosis),
+            "best_day": float(best_day),
+            "worst_day": float(worst_day),
             "total_trades": total_trades,
             "winning_trades": winning_trades,
             "win_rate": win_rate,
@@ -370,18 +435,30 @@ class BacktestEngine:
         )
         print(f"Initial Capital: ${self.results['initial_capital']:,.2f}")
         print(f"Final Capital: ${self.results['final_capital']:,.2f}")
-        print(f"\nPERFORMANCE METRICS:")
+        print(f"\n📊 RETURN METRICS:")
         print(f"Total Return: {self.results['total_return']*100:.2f}%")
         print(f"Annualized Return: {self.results['annualized_return']*100:.2f}%")
         print(f"Volatility: {self.results['volatility']*100:.2f}%")
+        print(f"\n📈 RISK-ADJUSTED METRICS:")
         print(f"Sharpe Ratio: {self.results['sharpe_ratio']:.3f}")
+        print(f"Sortino Ratio: {self.results['sortino_ratio']:.3f}")
+        print(f"Calmar Ratio: {self.results['calmar_ratio']:.3f}")
+        print(f"\n⚠️  RISK METRICS:")
         print(f"Max Drawdown: {self.results['max_drawdown']*100:.2f}%")
-        print(f"\nTRADE STATISTICS:")
+        print(f"VaR (95%): {self.results['var_95']*100:.2f}%")
+        print(f"CVaR (95%): {self.results['cvar_95']*100:.2f}%")
+        print(f"\n📊 DISTRIBUTION METRICS:")
+        print(f"Skewness: {self.results['skewness']:.3f}")
+        print(f"Kurtosis: {self.results['kurtosis']:.3f}")
+        print(f"Best Day: {self.results['best_day']*100:.2f}%")
+        print(f"Worst Day: {self.results['worst_day']*100:.2f}%")
+        print(f"\n🔄 TRADE STATISTICS:")
         print(f"Total Trades: {self.results['total_trades']}")
         print(f"Winning Trades: {self.results['winning_trades']}")
         print(f"Win Rate: {self.results['win_rate']*100:.2f}%")
         print(f"Profit Factor: {self.results['profit_factor']:.3f}")
         print(f"{'='*60}")
+        print("📈 Enhanced with QuantStats - Professional Portfolio Analytics")
 
     def export_results(self, filepath: str):
         """
@@ -412,7 +489,15 @@ class BacktestEngine:
                 "Annualized Return (%)",
                 "Volatility (%)",
                 "Sharpe Ratio",
+                "Sortino Ratio",
+                "Calmar Ratio",
                 "Max Drawdown (%)",
+                "VaR 95% (%)",
+                "CVaR 95% (%)",
+                "Skewness",
+                "Kurtosis",
+                "Best Day (%)",
+                "Worst Day (%)",
                 "Total Trades",
                 "Winning Trades",
                 "Win Rate (%)",
@@ -425,7 +510,15 @@ class BacktestEngine:
                 self.results["annualized_return"] * 100,
                 self.results["volatility"] * 100,
                 self.results["sharpe_ratio"],
+                self.results["sortino_ratio"],
+                self.results["calmar_ratio"],
                 self.results["max_drawdown"] * 100,
+                self.results["var_95"] * 100,
+                self.results["cvar_95"] * 100,
+                self.results["skewness"],
+                self.results["kurtosis"],
+                self.results["best_day"] * 100,
+                self.results["worst_day"] * 100,
                 self.results["total_trades"],
                 self.results["winning_trades"],
                 self.results["win_rate"] * 100,
@@ -437,6 +530,92 @@ class BacktestEngine:
         summary_df.to_csv(filepath, index=False)
 
         self.logger.info(f"Results exported to {filepath}")
+
+    def generate_quantstats_report(
+        self, 
+        output_path: Optional[str] = None, 
+        benchmark_symbol: Optional[str] = None,
+        title: Optional[str] = None
+    ):
+        """
+        Generate a comprehensive QuantStats HTML report.
+        
+        Args:
+            output_path: Path to save the HTML report (default: strategy_name_report.html)
+            benchmark_symbol: Optional benchmark symbol for comparison (e.g., 'SPY')
+            title: Custom title for the report
+        """
+        if not self.results:
+            raise ValueError("No backtest results available. Run backtest first.")
+        
+        # Prepare returns data
+        returns = self.results["data"]["returns"].dropna()
+        returns.name = "Strategy Returns"
+        
+        # Set default output path
+        if output_path is None:
+            strategy_name = self.results["strategy_name"].replace(" ", "_")
+            output_path = f"{strategy_name}_quantstats_report.html"
+        
+        # Set default title
+        if title is None:
+            title = f'{self.results["strategy_name"]} Performance Report'
+        
+        try:
+            # Fetch benchmark data if requested
+            benchmark_returns = None
+            if benchmark_symbol:
+                try:
+                    from src.data.data_fetcher import DataFetcher
+                    
+                    fetcher = DataFetcher()
+                    start_date = self.results["start_date"].strftime("%Y-%m-%d")
+                    end_date = self.results["end_date"].strftime("%Y-%m-%d")
+                    
+                    benchmark_data = fetcher.fetch_data(benchmark_symbol, start_date, end_date)
+                    if benchmark_data is not None and len(benchmark_data) > 1:
+                        benchmark_returns = benchmark_data["close"].pct_change().dropna()
+                        benchmark_returns.name = f"{benchmark_symbol} Benchmark"
+                        
+                        # Align dates with strategy returns
+                        benchmark_returns = benchmark_returns.reindex(returns.index, method='ffill')
+                        
+                        self.logger.info(f"Using {benchmark_symbol} as benchmark for comparison")
+                    else:
+                        self.logger.warning(f"Could not fetch benchmark data for {benchmark_symbol}")
+                        
+                except Exception as e:
+                    self.logger.warning(f"Failed to fetch benchmark data: {e}")
+            
+            # Generate the report
+            if benchmark_returns is not None:
+                qs.reports.html(
+                    returns, 
+                    benchmark=benchmark_returns,
+                    output=output_path,
+                    title=title
+                )
+                self.logger.info(f"QuantStats report with benchmark generated: {output_path}")
+            else:
+                qs.reports.html(
+                    returns,
+                    output=output_path, 
+                    title=title
+                )
+                self.logger.info(f"QuantStats report generated: {output_path}")
+            
+            return output_path
+            
+        except Exception as e:
+            self.logger.error(f"Failed to generate QuantStats report: {e}")
+            # Fallback to basic report
+            try:
+                qs.reports.basic(returns)
+                self.logger.info("Generated basic QuantStats report in console")
+            except Exception as fallback_error:
+                self.logger.error(f"Failed to generate basic report: {fallback_error}")
+            
+            return None
 
 
 def compare_strategies(
@@ -463,7 +642,7 @@ def compare_strategies(
         backtest = BacktestEngine(initial_capital=initial_capital)
         result = backtest.run_backtest(strategy, data)
 
-        # Extract key metrics
+        # Extract key metrics (enhanced with QuantStats)
         results.append(
             {
                 "Strategy": name,
@@ -471,9 +650,16 @@ def compare_strategies(
                 "Annualized Return (%)": result["annualized_return"] * 100,
                 "Volatility (%)": result["volatility"] * 100,
                 "Sharpe Ratio": result["sharpe_ratio"],
+                "Sortino Ratio": result["sortino_ratio"],
+                "Calmar Ratio": result["calmar_ratio"],
                 "Max Drawdown (%)": result["max_drawdown"] * 100,
+                "VaR 95% (%)": result["var_95"] * 100,
+                "CVaR 95% (%)": result["cvar_95"] * 100,
                 "Win Rate (%)": result["win_rate"] * 100,
+                "Profit Factor": result["profit_factor"],
                 "Total Trades": result["total_trades"],
+                "Best Day (%)": result["best_day"] * 100,
+                "Worst Day (%)": result["worst_day"] * 100,
             }
         )
 

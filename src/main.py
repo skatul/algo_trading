@@ -6,8 +6,6 @@ It provides a unified interface for running backtests, live trading, and analysi
 """
 
 import pandas as pd
-import matplotlib.pyplot as plt
-from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Union, Any
 import logging
 import os
@@ -21,7 +19,7 @@ from src.strategies.sample_strategies import (
     BuyAndHoldStrategy,
 )
 from src.backtesting.backtest_engine import BacktestEngine, compare_strategies
-from src.utils.config import Config, setup_logging, get_config
+from src.utils.config import setup_logging, get_config
 
 
 class TradingEngine:
@@ -301,6 +299,48 @@ class TradingEngine:
         if self.backtest_engine:
             self.backtest_engine.results = self.backtest_results[key]
             self.backtest_engine.export_results(filepath)
+
+    def generate_quantstats_report(
+        self, 
+        strategy_name: Optional[str] = None,
+        output_path: Optional[str] = None,
+        benchmark_symbol: str = "SPY",
+        title: Optional[str] = None
+    ) -> Optional[str]:
+        """
+        Generate a comprehensive QuantStats HTML report.
+        
+        Args:
+            strategy_name: Specific strategy to generate report for (if None, uses most recent)
+            output_path: Path to save the HTML report
+            benchmark_symbol: Benchmark symbol for comparison (default: 'SPY')
+            title: Custom title for the report
+            
+        Returns:
+            Path to generated report or None if failed
+        """
+        if not self.backtest_results:
+            raise ValueError("No backtest results to analyze. Run a backtest first.")
+
+        if strategy_name:
+            key = strategy_name
+        else:
+            key = list(self.backtest_results.keys())[-1]  # Most recent
+
+        if key not in self.backtest_results:
+            available = ", ".join(self.backtest_results.keys())
+            raise ValueError(f"Strategy '{key}' not found. Available: {available}")
+
+        # Use the stored backtest engine to generate report
+        if self.backtest_engine:
+            self.backtest_engine.results = self.backtest_results[key]
+            return self.backtest_engine.generate_quantstats_report(
+                output_path=output_path,
+                benchmark_symbol=benchmark_symbol,
+                title=title
+            )
+        else:
+            raise ValueError("No backtest engine available")
 
     def get_available_strategies(self) -> List[str]:
         """
