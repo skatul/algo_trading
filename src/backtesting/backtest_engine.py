@@ -536,7 +536,7 @@ class BacktestEngine:
         output_path: Optional[str] = None, 
         benchmark_symbol: Optional[str] = None,
         title: Optional[str] = None
-    ):
+    ) -> Optional[str]:
         """
         Generate a comprehensive QuantStats HTML report.
         
