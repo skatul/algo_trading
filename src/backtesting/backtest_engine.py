@@ -578,7 +578,7 @@ class BacktestEngine:
                         benchmark_returns.name = f"{benchmark_symbol} Benchmark"
                         
                         # Align dates with strategy returns
-                        benchmark_returns = benchmark_returns.reindex(returns.index, method='ffill')
+                        benchmark_returns = benchmark_returns.reindex(returns.index).ffill()
                         
                         self.logger.info(f"Using {benchmark_symbol} as benchmark for comparison")
                     else:
