@@ -309,7 +309,7 @@ class BacktestEngine:
             sortino_ratio = sharpe_ratio  # Approximation
             calmar_ratio = annualized_return / abs(max_drawdown) if max_drawdown != 0 else 0
             var_95 = returns.quantile(0.05) if len(returns) > 0 else 0
-            cvar_95 = returns[returns <= var_95].mean() if len(returns) > 0 else 0
+            cvar_95 = returns[returns <= var_95].mean() if len(returns[returns <= var_95]) > 0 else var_95
             skewness = returns.skew() if len(returns) > 2 else 0
             kurtosis = returns.kurtosis() if len(returns) > 2 else 0
             best_day = returns.max() if len(returns) > 0 else 0
