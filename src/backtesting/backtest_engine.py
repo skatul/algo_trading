@@ -6,6 +6,7 @@ including performance metrics, visualization, and trade analysis.
 """
 
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import quantstats as qs
 from typing import Dict, List, Optional
@@ -309,7 +310,7 @@ class BacktestEngine:
             sortino_ratio = sharpe_ratio  # Approximation
             calmar_ratio = annualized_return / abs(max_drawdown) if max_drawdown != 0 else 0
             var_95 = returns.quantile(0.05) if len(returns) > 0 else 0
-            cvar_95 = returns[returns <= var_95].mean() if len(returns) > 0 else 0
+            cvar_95 = returns[returns <= var_95].mean() if len(returns[returns <= var_95]) > 0 else var_95
             skewness = returns.skew() if len(returns) > 2 else 0
             kurtosis = returns.kurtosis() if len(returns) > 2 else 0
             best_day = returns.max() if len(returns) > 0 else 0
@@ -347,19 +348,19 @@ class BacktestEngine:
         )
 
         return {
-            "total_return": float(total_return),
-            "annualized_return": float(annualized_return),
-            "volatility": float(volatility),
-            "sharpe_ratio": float(sharpe_ratio),
-            "sortino_ratio": float(sortino_ratio),
-            "calmar_ratio": float(calmar_ratio),
-            "max_drawdown": float(max_drawdown),
-            "var_95": float(var_95),
-            "cvar_95": float(cvar_95),
-            "skewness": float(skewness),
-            "kurtosis": float(kurtosis),
-            "best_day": float(best_day),
-            "worst_day": float(worst_day),
+            "total_return": float(total_return) if not (np.isnan(total_return) or np.isinf(total_return)) else 0.0,
+            "annualized_return": float(annualized_return) if not (np.isnan(annualized_return) or np.isinf(annualized_return)) else 0.0,
+            "volatility": float(volatility) if not (np.isnan(volatility) or np.isinf(volatility)) else 0.0,
+            "sharpe_ratio": float(sharpe_ratio) if not (np.isnan(sharpe_ratio) or np.isinf(sharpe_ratio)) else 0.0,
+            "sortino_ratio": float(sortino_ratio) if not (np.isnan(sortino_ratio) or np.isinf(sortino_ratio)) else 0.0,
+            "calmar_ratio": float(calmar_ratio) if not (np.isnan(calmar_ratio) or np.isinf(calmar_ratio)) else 0.0,
+            "max_drawdown": float(max_drawdown) if not (np.isnan(max_drawdown) or np.isinf(max_drawdown)) else 0.0,
+            "var_95": float(var_95) if not (np.isnan(var_95) or np.isinf(var_95)) else 0.0,
+            "cvar_95": float(cvar_95) if not (np.isnan(cvar_95) or np.isinf(cvar_95)) else 0.0,
+            "skewness": float(skewness) if not (np.isnan(skewness) or np.isinf(skewness)) else 0.0,
+            "kurtosis": float(kurtosis) if not (np.isnan(kurtosis) or np.isinf(kurtosis)) else 0.0,
+            "best_day": float(best_day) if not (np.isnan(best_day) or np.isinf(best_day)) else 0.0,
+            "worst_day": float(worst_day) if not (np.isnan(worst_day) or np.isinf(worst_day)) else 0.0,
             "total_trades": total_trades,
             "winning_trades": winning_trades,
             "win_rate": win_rate,
@@ -456,7 +457,7 @@ class BacktestEngine:
         print(f"Total Trades: {self.results['total_trades']}")
         print(f"Winning Trades: {self.results['winning_trades']}")
         print(f"Win Rate: {self.results['win_rate']*100:.2f}%")
-        print(f"Profit Factor: {self.results['profit_factor']:.3f}")
+        print(f"Profit Factor: {'∞ (no losses)' if self.results['profit_factor'] == float('inf') else f'{self.results['profit_factor']:.3f}'}")
         print(f"{'='*60}")
         print("📈 Enhanced with QuantStats - Professional Portfolio Analytics")
 
@@ -536,7 +537,7 @@ class BacktestEngine:
         output_path: Optional[str] = None, 
         benchmark_symbol: Optional[str] = None,
         title: Optional[str] = None
-    ):
+    ) -> Optional[str]:
         """
         Generate a comprehensive QuantStats HTML report.
         
@@ -572,13 +573,13 @@ class BacktestEngine:
                     start_date = self.results["start_date"].strftime("%Y-%m-%d")
                     end_date = self.results["end_date"].strftime("%Y-%m-%d")
                     
-                    benchmark_data = fetcher.fetch_data(benchmark_symbol, start_date, end_date)
+                    benchmark_data = fetcher.get_yahoo_data(benchmark_symbol, start=start_date, end=end_date)
                     if benchmark_data is not None and len(benchmark_data) > 1:
                         benchmark_returns = benchmark_data["close"].pct_change().dropna()
                         benchmark_returns.name = f"{benchmark_symbol} Benchmark"
                         
                         # Align dates with strategy returns
-                        benchmark_returns = benchmark_returns.reindex(returns.index, method='ffill')
+                        benchmark_returns = benchmark_returns.reindex(returns.index).ffill()
                         
                         self.logger.info(f"Using {benchmark_symbol} as benchmark for comparison")
                     else:
