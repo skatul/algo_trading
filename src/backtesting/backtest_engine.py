@@ -572,7 +572,7 @@ class BacktestEngine:
                     start_date = self.results["start_date"].strftime("%Y-%m-%d")
                     end_date = self.results["end_date"].strftime("%Y-%m-%d")
                     
-                    benchmark_data = fetcher.fetch_data(benchmark_symbol, start_date, end_date)
+                    benchmark_data = fetcher.get_yahoo_data(benchmark_symbol, start=start_date, end=end_date)
                     if benchmark_data is not None and len(benchmark_data) > 1:
                         benchmark_returns = benchmark_data["close"].pct_change().dropna()
                         benchmark_returns.name = f"{benchmark_symbol} Benchmark"
