@@ -150,11 +150,22 @@ class TradingEngine:
         """
         # Get initial capital from config if not provided
         if initial_capital is None:
-            initial_capital = self.config.get("trading.initial_capital", 100000)
+            config_value = self.config.get("trading.initial_capital", 100000)
+            try:
+                initial_capital = float(config_value)
+            except (ValueError, TypeError) as e:
+                self.logger.warning(f"Invalid initial_capital in config: {config_value}. Using default 100000. Error: {e}")
+                initial_capital = 100000.0
+        else:
+            try:
+                initial_capital = float(initial_capital)
+            except (ValueError, TypeError) as e:
+                self.logger.error(f"Invalid initial_capital provided: {initial_capital}. Error: {e}")
+                raise ValueError(f"initial_capital must be a valid number, got: {initial_capital}")
         
-        # Ensure we have a valid float value
-        assert initial_capital is not None, "initial_capital cannot be None"
-        initial_capital = float(initial_capital)
+        # Validate initial capital is positive
+        if initial_capital <= 0:
+            raise ValueError(f"initial_capital must be positive, got: {initial_capital}")
 
         # Create strategy if string provided
         if isinstance(strategy, str):
@@ -218,10 +229,17 @@ class TradingEngine:
             strategy_obj = self.create_strategy(strategy_name, **params)
             strategy_list.append({"name": name, "strategy": strategy_obj})
 
-        # Run comparison
-        initial_capital = kwargs.get("initial_capital") or self.config.get(
+        # Run comparison - safely handle initial_capital
+        initial_capital_value = kwargs.get("initial_capital") or self.config.get(
             "trading.initial_capital", 100000
         )
+        try:
+            initial_capital = float(initial_capital_value)
+            if initial_capital <= 0:
+                raise ValueError(f"initial_capital must be positive, got: {initial_capital}")
+        except (ValueError, TypeError) as e:
+            self.logger.warning(f"Invalid initial_capital for comparison: {initial_capital_value}. Using default 100000. Error: {e}")
+            initial_capital = 100000.0
         comparison_results = compare_strategies(
             strategy_list, self.current_data, initial_capital
         )
