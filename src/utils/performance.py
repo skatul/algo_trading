@@ -39,7 +39,8 @@ class PerformanceProfiler:
                 
                 # Start profiling
                 start_time = time.perf_counter()
-                tracemalloc.start()
+                if not tracemalloc.is_tracing():
+                    tracemalloc.start()
                 process = psutil.Process()
                 start_memory = process.memory_info().rss / 1024 / 1024  # MB
                 
