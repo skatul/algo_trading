@@ -6,14 +6,10 @@ import unittest
 from unittest.mock import Mock, patch, MagicMock
 import pandas as pd
 import numpy as np
-import sys
 import os
 from datetime import datetime, timedelta
 
-# Add the src directory to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-from data.data_fetcher import DataFetcher
+from src.data.data_fetcher import DataFetcher
 
 
 class TestDataFetcher(unittest.TestCase):
@@ -42,7 +38,7 @@ class TestDataFetcher(unittest.TestCase):
         self.assertIsNotNone(fetcher.logger)
         self.assertIsInstance(fetcher.data_cache, dict)
 
-    @patch("data.data_fetcher.yf.Ticker")
+    @patch("src.data.data_fetcher.yf.Ticker")
     def test_get_yahoo_data_success(self, mock_ticker):
         """Test successful Yahoo Finance data retrieval."""
         # Mock yfinance response
@@ -60,7 +56,7 @@ class TestDataFetcher(unittest.TestCase):
         self.assertEqual(result["symbol"].iloc[0], "AAPL")
         mock_ticker.assert_called_once_with("AAPL")
 
-    @patch("data.data_fetcher.yf.Ticker")
+    @patch("src.data.data_fetcher.yf.Ticker")
     def test_get_yahoo_data_empty(self, mock_ticker):
         """Test handling of empty Yahoo Finance response."""
         # Mock empty response
@@ -72,7 +68,7 @@ class TestDataFetcher(unittest.TestCase):
 
         self.assertTrue(result.empty)
 
-    @patch("data.data_fetcher.yf.Ticker")
+    @patch("src.data.data_fetcher.yf.Ticker")
     def test_get_yahoo_data_exception(self, mock_ticker):
         """Test exception handling in Yahoo Finance data retrieval."""
         # Mock exception
@@ -95,7 +91,7 @@ class TestDataFetcher(unittest.TestCase):
             for symbol in symbols:
                 self.assertIn(symbol, result)
 
-    @patch("data.data_fetcher.requests.get")
+    @patch("src.data.data_fetcher.requests.get")
     def test_get_alpha_vantage_data_success(self, mock_get):
         """Test successful Alpha Vantage data retrieval."""
         # Mock API response
@@ -138,7 +134,7 @@ class TestDataFetcher(unittest.TestCase):
 
         self.assertTrue(result.empty)
 
-    @patch("data.data_fetcher.yf.Ticker")
+    @patch("src.data.data_fetcher.yf.Ticker")
     def test_get_stock_info(self, mock_ticker):
         """Test stock information retrieval."""
         # Mock stock info
@@ -211,8 +207,8 @@ class TestDataFetcher(unittest.TestCase):
         rsi_values = result["rsi"].dropna()
         self.assertTrue(all(0 <= val <= 100 for val in rsi_values))
 
-    @patch("data.data_fetcher.pd.DataFrame.to_csv")
-    @patch("data.data_fetcher.os.makedirs")
+    @patch("src.data.data_fetcher.pd.DataFrame.to_csv")
+    @patch("src.data.data_fetcher.os.makedirs")
     def test_save_data_csv(self, mock_makedirs, mock_to_csv):
         """Test saving data to CSV format."""
         self.fetcher.save_data(self.sample_data, "test_data", "csv")
@@ -220,7 +216,7 @@ class TestDataFetcher(unittest.TestCase):
         mock_makedirs.assert_called_once()
         mock_to_csv.assert_called_once()
 
-    @patch("data.data_fetcher.pd.read_csv")
+    @patch("src.data.data_fetcher.pd.read_csv")
     def test_load_data_csv(self, mock_read_csv):
         """Test loading data from CSV format."""
         mock_read_csv.return_value = self.sample_data

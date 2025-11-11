@@ -6,11 +6,7 @@ import unittest
 from unittest.mock import Mock, patch, MagicMock
 import pandas as pd
 import numpy as np
-import sys
 import os
-
-# Add the src directory to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from src.main import TradingEngine
 
@@ -21,9 +17,9 @@ class TestTradingEngine(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures."""
         # Mock the dependencies to avoid initialization issues
-        with patch("main.Config"), patch("main.setup_logging"), patch(
-            "main.DataFetcher"
-        ), patch("main.BacktestEngine"):
+        with patch("src.main.Config"), patch("src.main.setup_logging"), patch(
+            "src.main.DataFetcher"
+        ), patch("src.main.BacktestEngine"):
             self.engine = TradingEngine()
 
         # Sample data for testing
@@ -44,7 +40,7 @@ class TestTradingEngine(unittest.TestCase):
         self.assertIsInstance(self.engine, TradingEngine)
         self.assertIsNotNone(self.engine.logger)
 
-    @patch("main.DataFetcher")
+    @patch("src.main.DataFetcher")
     def test_fetch_data(self, mock_data_fetcher):
         """Test data fetching functionality."""
         # Mock the data fetcher
@@ -54,8 +50,8 @@ class TestTradingEngine(unittest.TestCase):
         mock_data_fetcher.return_value = mock_fetcher_instance
 
         # Initialize engine with mocked dependencies
-        with patch("main.Config"), patch("main.setup_logging"), patch(
-            "main.BacktestEngine"
+        with patch("src.main.Config"), patch("src.main.setup_logging"), patch(
+            "src.main.BacktestEngine"
         ):
             engine = TradingEngine()
             engine.data_fetcher = mock_fetcher_instance
@@ -114,7 +110,7 @@ class TestTradingEngine(unittest.TestCase):
         mock_backtest_engine.return_value = mock_engine_instance
 
         # Initialize engine
-        with patch("main.Config"), patch("main.setup_logging"):
+        with patch("src.main.Config"), patch("src.main.setup_logging"):
             engine = TradingEngine()
             engine.data_fetcher = mock_fetcher_instance
 
@@ -126,8 +122,8 @@ class TestTradingEngine(unittest.TestCase):
         # Note: BacktestEngine is created internally, so we just check that we got a result
         self.assertIsInstance(result, dict)
 
-    @patch("main.BacktestEngine")
-    @patch("main.DataFetcher")
+    @patch("src.main.BacktestEngine")
+    @patch("src.main.DataFetcher")
     def test_compare_strategies(self, mock_data_fetcher, mock_backtest_engine):
         """Test comparing multiple strategies."""
         # Mock data fetcher
@@ -150,7 +146,7 @@ class TestTradingEngine(unittest.TestCase):
         mock_backtest_engine.return_value = mock_engine_instance
 
         # Initialize engine
-        with patch("main.Config"), patch("main.setup_logging"):
+        with patch("src.main.Config"), patch("src.main.setup_logging"):
             engine = TradingEngine()
             engine.data_fetcher = mock_fetcher_instance
             engine.backtest_engine = mock_engine_instance
@@ -184,7 +180,7 @@ class TestTradingEngine(unittest.TestCase):
         for key in expected_keys:
             self.assertIn(key, metrics)
 
-    @patch("main.DataFetcher")
+    @patch("src.main.DataFetcher")
     def test_get_market_data_with_indicators(self, mock_data_fetcher):
         """Test getting market data with technical indicators."""
         # Mock data fetcher
@@ -194,8 +190,8 @@ class TestTradingEngine(unittest.TestCase):
         mock_data_fetcher.return_value = mock_fetcher_instance
 
         # Initialize engine
-        with patch("main.Config"), patch("main.setup_logging"), patch(
-            "main.BacktestEngine"
+        with patch("src.main.Config"), patch("src.main.setup_logging"), patch(
+            "src.main.BacktestEngine"
         ):
             engine = TradingEngine()
             engine.data_fetcher = mock_fetcher_instance
@@ -295,9 +291,9 @@ class TestTradingEngineErrorHandling(unittest.TestCase):
             index=dates,
         )
         
-        with patch("main.Config"), patch("main.setup_logging"), patch(
-            "main.DataFetcher"
-        ), patch("main.BacktestEngine"):
+        with patch("src.main.Config"), patch("src.main.setup_logging"), patch(
+            "src.main.DataFetcher"
+        ), patch("src.main.BacktestEngine"):
             self.engine = TradingEngine()
 
     def test_backtest_with_empty_data(self):

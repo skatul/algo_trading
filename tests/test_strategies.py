@@ -6,12 +6,7 @@ import unittest
 from unittest.mock import Mock, patch
 import pandas as pd
 import numpy as np
-import sys
-import os
 from datetime import datetime
-
-# Add the src directory to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from src.strategies.base_strategy import BaseStrategy, PositionType
 from src.strategies.sample_strategies import (
