@@ -12,6 +12,7 @@ import psutil
 import tracemalloc
 from typing import Dict, Any, Callable, Optional
 from datetime import datetime
+from functools import lru_cache
 
 
 class PerformanceProfiler:

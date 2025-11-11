@@ -350,8 +350,10 @@ class TestErrorHandling:
         sizer = PositionSizer()
         analyzer = RiskAnalyzer()
         
-        # Test with invalid inputs (negative values)
-        assert sizer.kelly_criterion(-0.1, 100, 50) == 0.0
+        # Test with invalid inputs (should raise exceptions now)
+        with pytest.raises(ValueError):
+            sizer.kelly_criterion(-0.1, 100, 50)
+        
         assert analyzer.calculate_var(pd.Series([]), 0.95) == 0.0
         
         # Test with edge case confidence levels
@@ -361,6 +363,22 @@ class TestErrorHandling:
         
         var = analyzer.calculate_var(returns, 0.01)  # Valid low confidence
         assert isinstance(var, float)
+    
+    def test_enhanced_kelly_criterion_validation(self):
+        """Test enhanced Kelly Criterion input validation."""
+        sizer = PositionSizer()
+        
+        # Test boundary validation
+        with pytest.raises(ValueError, match="Win rate must be between 0 and 1"):
+            sizer.kelly_criterion(1.5, 100, 50)
+        
+        with pytest.raises(ValueError, match="Average win amount must be positive"):
+            sizer.kelly_criterion(0.6, -100, 50)
+        
+        # Test logging for warnings (these should return 0.0 safely)
+        assert sizer.kelly_criterion(0.6, 100, -50) == 0.0  # Negative loss
+        assert sizer.kelly_criterion(0.0, 100, 50) == 0.0  # Zero win rate
+        assert sizer.kelly_criterion(1.0, 100, 50) == 0.0  # 100% win rate
     
     def test_empty_data_handling(self):
         """Test handling of empty data."""

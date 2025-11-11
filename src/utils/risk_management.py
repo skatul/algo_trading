@@ -14,6 +14,38 @@ from enum import Enum
 import logging
 
 
+@dataclass
+class RiskConfig:
+    """Configuration for risk management parameters."""
+    max_kelly_fraction: float = 0.25
+    max_position_size: float = 0.10
+    max_portfolio_risk: float = 0.15
+    max_sector_exposure: float = 0.30
+    confidence_levels: Tuple[float, ...] = (0.95, 0.99)
+    min_confidence_score: float = 0.5
+
+
+class ValidationUtils:
+    """Common validation utilities for risk management."""
+    
+    @staticmethod
+    def validate_numeric_inputs(*args) -> bool:
+        """Validate that all inputs are numeric."""
+        return all(isinstance(arg, (int, float)) for arg in args)
+    
+    @staticmethod
+    def validate_probability(value: float, name: str = "probability") -> None:
+        """Validate that a value is a valid probability (0-1)."""
+        if not 0 <= value <= 1:
+            raise ValueError(f"{name} must be between 0 and 1, got {value}")
+    
+    @staticmethod
+    def validate_positive(value: float, name: str = "value") -> None:
+        """Validate that a value is positive."""
+        if value <= 0:
+            raise ValueError(f"{name} must be positive, got {value}")
+
+
 class RiskLevel(Enum):
     """Risk level classification."""
     LOW = "low"
@@ -62,18 +94,41 @@ class PositionSizer:
             
         Returns:
             Optimal position size fraction (0-1)
+            
+        Raises:
+            ValueError: If input parameters are invalid
         """
-        if avg_loss <= 0 or win_rate <= 0 or win_rate >= 1:
+        # Enhanced input validation using utilities
+        if not ValidationUtils.validate_numeric_inputs(win_rate, avg_win, avg_loss):
+            raise ValueError("All parameters must be numeric")
+        
+        ValidationUtils.validate_probability(win_rate, "Win rate")
+        ValidationUtils.validate_positive(avg_win, "Average win amount")
+        
+        if avg_loss <= 0:
+            self.logger.warning("Average loss is non-positive, returning 0 position size")
             return 0.0
         
-        b = avg_win / avg_loss  # Odds received on the wager
-        p = win_rate  # Probability of winning
-        q = 1 - p  # Probability of losing
+        if win_rate <= 0 or win_rate >= 1:
+            self.logger.warning(f"Win rate {win_rate} is at extremes, returning 0 position size")
+            return 0.0
         
-        kelly_fraction = (b * p - q) / b
-        
-        # Cap at reasonable limits
-        return max(0.0, min(kelly_fraction, 0.25))  # Never risk more than 25%
+        try:
+            b = avg_win / avg_loss  # Odds received on the wager
+            p = win_rate  # Probability of winning
+            q = 1 - p  # Probability of losing
+            
+            kelly_fraction = (b * p - q) / b
+            
+            # Cap at reasonable limits
+            result = max(0.0, min(kelly_fraction, 0.25))  # Never risk more than 25%
+            
+            self.logger.debug(f"Kelly Criterion: win_rate={win_rate}, avg_win={avg_win}, avg_loss={avg_loss}, result={result}")
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"Error calculating Kelly Criterion: {e}")
+            return 0.0
     
     def position_size_atr(
         self, 
