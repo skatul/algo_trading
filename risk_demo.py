@@ -305,7 +305,7 @@ def create_risk_visualization():
     # Display the plot if running interactively
     try:
         plt.show()
-    except:
+    except Exception:
         print("Note: Plot display not available in this environment")
 
 
