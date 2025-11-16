@@ -6,12 +6,6 @@ This script demonstrates the main features of the trading system including
 data fetching, strategy backtesting, and performance analysis.
 """
 
-import sys
-import os
-
-# Add the project root to Python path
-sys.path.append("/home/atul/projects/algo_trading")
-
 from src.main import TradingEngine
 
 
@@ -40,16 +34,25 @@ def demo_single_strategy():
     # Test Moving Average strategy
     print("Testing Moving Average Crossover Strategy on AAPL...")
     result = engine.backtest(
-        strategy="moving_average",
+        strategy_name="moving_average",
         symbol="AAPL",
         short_window=20,
         long_window=50,
         initial_capital=100000,
     )
 
-    # Print summary
-    engine.print_summary()
-    print()
+    if result:
+        # Print summary using the backtest engine if it exists
+        if hasattr(engine, 'backtest_engine') and engine.backtest_engine:
+            engine.backtest_engine.print_summary()
+        else:
+            print(f"Backtest completed successfully!")
+            print(f"Total Return: {result.get('total_return', 0)*100:.2f}%")
+            print(f"Sharpe Ratio: {result.get('sharpe_ratio', 0):.2f}")
+        print()
+    else:
+        print("Backtest failed. Please check your data connection or symbol.")
+        print()
 
 
 def demo_strategy_comparison():
@@ -92,15 +95,27 @@ def demo_multiple_symbols():
             "moving_average", symbol, short_window=10, long_window=30
         )
 
-        results.append(
-            {
-                "Symbol": symbol,
-                "Total Return (%)": result["total_return"] * 100,
-                "Sharpe Ratio": result["sharpe_ratio"],
-                "Max Drawdown (%)": result["max_drawdown"] * 100,
-                "Win Rate (%)": result["win_rate"] * 100,
-            }
-        )
+        if result:
+            results.append(
+                {
+                    "Symbol": symbol,
+                    "Total Return (%)": result.get("total_return", 0) * 100,
+                    "Sharpe Ratio": result.get("sharpe_ratio", 0),
+                    "Max Drawdown (%)": result.get("max_drawdown", 0) * 100,
+                    "Win Rate (%)": result.get("win_rate", 0) * 100,
+                }
+            )
+        else:
+            print(f"  Failed to backtest {symbol}")
+            results.append(
+                {
+                    "Symbol": symbol,
+                    "Total Return (%)": 0,
+                    "Sharpe Ratio": 0,
+                    "Max Drawdown (%)": 0,
+                    "Win Rate (%)": 0,
+                }
+            )
 
     import pandas as pd
 

@@ -6,15 +6,10 @@ import unittest
 from unittest.mock import Mock, patch
 import pandas as pd
 import numpy as np
-import sys
-import os
 from datetime import datetime
 
-# Add the src directory to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-from strategies.base_strategy import BaseStrategy, PositionType
-from strategies.sample_strategies import (
+from src.strategies.base_strategy import BaseStrategy, PositionType
+from src.strategies.sample_strategies import (
     MovingAverageCrossoverStrategy,
     SimpleRSIStrategy,
     BuyAndHoldStrategy,
@@ -84,7 +79,7 @@ class TestBaseStrategy(unittest.TestCase):
 
     def test_run_strategy(self):
         """Test running the complete strategy."""
-        result = self.strategy.run(self.sample_data)
+        result = self.strategy.run_strategy(self.sample_data)
 
         self.assertIsInstance(result, pd.DataFrame)
         self.assertIn("test_indicator", result.columns)
@@ -119,7 +114,7 @@ class TestBaseStrategy(unittest.TestCase):
 
         trade = self.strategy.trades[0]
         self.assertEqual(trade["pnl"], 10.0)
-        self.assertEqual(trade["pnl_percent"], 10.0)
+        self.assertEqual(trade["pnl_pct"], 10.0)
 
     def test_calculate_performance_metrics(self):
         """Test performance metrics calculation."""
@@ -127,21 +122,24 @@ class TestBaseStrategy(unittest.TestCase):
         self.strategy.trades = [
             {
                 "pnl": 10,
-                "pnl_percent": 10,
+                "pnl_pct": 10,
                 "entry_date": datetime(2023, 1, 1),
                 "exit_date": datetime(2023, 1, 2),
+                "duration": 1,
             },
             {
                 "pnl": -5,
-                "pnl_percent": -5,
+                "pnl_pct": -5,
                 "entry_date": datetime(2023, 1, 3),
                 "exit_date": datetime(2023, 1, 4),
+                "duration": 1,
             },
             {
                 "pnl": 15,
-                "pnl_percent": 15,
+                "pnl_pct": 15,
                 "entry_date": datetime(2023, 1, 5),
                 "exit_date": datetime(2023, 1, 6),
+                "duration": 1,
             },
         ]
 
@@ -156,7 +154,7 @@ class TestBaseStrategy(unittest.TestCase):
 
         self.assertEqual(metrics["total_trades"], 3)
         self.assertEqual(metrics["winning_trades"], 2)
-        self.assertAlmostEqual(metrics["win_rate"], 66.67, places=1)
+        self.assertAlmostEqual(metrics["win_rate"], 0.6667, places=4)
         self.assertEqual(metrics["total_pnl"], 20)
 
 
@@ -193,8 +191,8 @@ class TestMovingAverageCrossoverStrategy(unittest.TestCase):
         """Test moving average calculation."""
         result = self.strategy.calculate_indicators(self.sample_data)
 
-        self.assertIn("sma_short", result.columns)
-        self.assertIn("sma_long", result.columns)
+        self.assertIn("sma_5", result.columns)
+        self.assertIn("sma_10", result.columns)
 
         # Check that moving averages are calculated correctly
         expected_short_ma = self.sample_data["close"].rolling(5).mean()
@@ -216,11 +214,11 @@ class TestMovingAverageCrossoverStrategy(unittest.TestCase):
 
     def test_run_complete_strategy(self):
         """Test running the complete strategy."""
-        result = self.strategy.run(self.sample_data)
+        result = self.strategy.run_strategy(self.sample_data)
 
         self.assertIsInstance(result, pd.DataFrame)
-        self.assertIn("sma_short", result.columns)
-        self.assertIn("sma_long", result.columns)
+        self.assertIn("sma_5", result.columns)
+        self.assertIn("sma_10", result.columns)
         self.assertIn("signal", result.columns)
 
 

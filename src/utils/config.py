@@ -164,10 +164,111 @@ class Config:
         Args:
             filepath: Path to save configuration
         """
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        directory = os.path.dirname(filepath)
+        if directory:  # Only create directory if there is one
+            os.makedirs(directory, exist_ok=True)
 
         with open(filepath, "w") as f:
             json.dump(self.config, f, indent=2, default=str)
+
+    def get_trading_config(self) -> Dict:
+        """Get trading configuration section."""
+        return self.config.get("trading", {})
+    
+    def get_data_config(self) -> Dict:
+        """Get data configuration section."""
+        return self.config.get("data", {})
+    
+    def get_backtesting_config(self) -> Dict:
+        """Get backtesting configuration section."""
+        return self.config.get("backtesting", {})
+    
+    def get_api_keys(self) -> Dict:
+        """Get API keys from configuration and environment."""
+        api_keys = {}
+        
+        # Get from environment variables
+        alpha_vantage_key = os.getenv("ALPHA_VANTAGE_API_KEY")
+        if alpha_vantage_key:
+            api_keys["alpha_vantage"] = alpha_vantage_key
+            
+        alpaca_key = os.getenv("ALPACA_API_KEY")
+        if alpaca_key:
+            api_keys["alpaca_api"] = alpaca_key
+            
+        alpaca_secret = os.getenv("ALPACA_SECRET_KEY") 
+        if alpaca_secret:
+            api_keys["alpaca_secret"] = alpaca_secret
+            
+        return api_keys
+    
+    def update_config(self, section: str, values: Dict):
+        """Update configuration section with new values."""
+        if section not in self.config:
+            self.config[section] = {}
+        self.config[section].update(values)
+    
+    def validate_config(self) -> bool:
+        """Validate configuration for required fields and valid ranges."""
+        try:
+            # Validate trading config
+            trading = self.get_trading_config()
+            if trading.get("initial_capital", 0) <= 0:
+                return False
+            if not (0 <= trading.get("commission", 0) < 1):
+                return False
+            if not (0 <= trading.get("max_position_size", 0) <= 1):
+                return False
+                
+            # Validate data config
+            data = self.get_data_config()
+            valid_sources = ["yahoo", "alpha_vantage", "alpaca"]
+            if data.get("default_source") not in valid_sources:
+                return False
+                
+            return True
+        except Exception:
+            return False
+    
+    @property
+    def trading(self) -> Dict:
+        """Get trading configuration (property for backward compatibility)."""
+        return self.get_trading_config()
+    
+    @property
+    def data(self) -> Dict:
+        """Get data configuration (property for backward compatibility)."""
+        return self.get_data_config()
+        
+    @property
+    def backtesting(self) -> Dict:
+        """Get backtesting configuration (property for backward compatibility)."""
+        return self.get_backtesting_config()
+        
+    @property
+    def logging(self) -> Dict:
+        """Get logging configuration (property for backward compatibility)."""
+        return self.config.get("logging", {})
+    
+    @trading.setter
+    def trading(self, value: Dict):
+        """Set trading configuration."""
+        self.config["trading"] = value
+    
+    @data.setter  
+    def data(self, value: Dict):
+        """Set data configuration."""
+        self.config["data"] = value
+        
+    @backtesting.setter
+    def backtesting(self, value: Dict):
+        """Set backtesting configuration."""
+        self.config["backtesting"] = value
+        
+    @logging.setter
+    def logging(self, value: Dict):
+        """Set logging configuration."""
+        self.config["logging"] = value
 
     def to_dict(self) -> Dict:
         """Return configuration as dictionary."""
@@ -223,6 +324,7 @@ def setup_logging(config: Config) -> logging.Logger:
 
     # Create application logger
     app_logger = logging.getLogger("algo_trading")
+    app_logger.setLevel(getattr(logging, log_level.upper()))
     app_logger.info("Logging system initialized")
 
     return app_logger

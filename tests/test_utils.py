@@ -4,15 +4,11 @@ Unit tests for utils modules.
 
 import unittest
 from unittest.mock import Mock, patch, mock_open
-import sys
 import os
 import json
 import logging
 
-# Add the src directory to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-from utils.config import Config, setup_logging
+from src.utils.config import Config, setup_logging
 
 
 class TestConfig(unittest.TestCase):

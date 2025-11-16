@@ -6,15 +6,10 @@ import unittest
 from unittest.mock import Mock, patch
 import pandas as pd
 import numpy as np
-import sys
-import os
 from datetime import datetime
 
-# Add the src directory to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-from backtesting.backtest_engine import BacktestEngine
-from strategies.base_strategy import BaseStrategy, PositionType
+from src.backtesting.backtest_engine import BacktestEngine
+from src.strategies.base_strategy import BaseStrategy, PositionType
 
 
 class TestBacktestEngine(unittest.TestCase):
@@ -40,9 +35,11 @@ class TestBacktestEngine(unittest.TestCase):
         )
 
         # Create a mock strategy
-        self.mock_strategy = Mock(spec=BaseStrategy)
+        self.mock_strategy = Mock()
         self.mock_strategy.name = "TestStrategy"
-        self.mock_strategy.run.return_value = self.sample_data
+        self.mock_strategy.parameters = {}
+        self.mock_strategy.run_strategy.return_value = self.sample_data
+        self.mock_strategy.run.return_value = self.sample_data  # Legacy interface
 
     def test_engine_initialization(self):
         """Test BacktestEngine initialization."""
@@ -111,7 +108,10 @@ class TestBacktestEngine(unittest.TestCase):
         result = self.engine.run_backtest(self.mock_strategy, self.sample_data)
 
         # Check that mock strategy was called
-        self.mock_strategy.run.assert_called_once_with(self.sample_data)
+        self.mock_strategy.run_strategy.assert_called_once()
+        # Verify the DataFrame passed to the strategy matches our sample data
+        call_args = self.mock_strategy.run_strategy.call_args[0][0]
+        pd.testing.assert_frame_equal(call_args, self.sample_data)
 
         # Check result structure
         self.assertIsInstance(result, dict)
@@ -205,7 +205,8 @@ class TestBacktestEngine(unittest.TestCase):
         try:
             self.engine.print_summary()
             success = True
-        except Exception:
+        except Exception as e:
+            print(f"Exception in print_summary: {e}")
             success = False
 
         self.assertTrue(success)
@@ -285,7 +286,7 @@ class TestBacktestEngineIntegration(unittest.TestCase):
 
     def test_buy_and_hold_strategy_integration(self):
         """Test integration with buy and hold strategy."""
-        from strategies.sample_strategies import BuyAndHoldStrategy
+        from src.strategies.sample_strategies import BuyAndHoldStrategy
 
         strategy = BuyAndHoldStrategy()
         result = self.engine.run_backtest(strategy, self.sample_data)
@@ -300,7 +301,7 @@ class TestBacktestEngineIntegration(unittest.TestCase):
 
     def test_moving_average_strategy_integration(self):
         """Test integration with moving average strategy."""
-        from strategies.sample_strategies import MovingAverageCrossoverStrategy
+        from src.strategies.sample_strategies import MovingAverageCrossoverStrategy
 
         strategy = MovingAverageCrossoverStrategy(short_window=5, long_window=10)
         result = self.engine.run_backtest(strategy, self.sample_data)
